@@ -1,0 +1,58 @@
+# GestureDrive — Default Configuration
+# ======================================
+# This file ships with the application and sets baseline values.
+# To override any setting, create config/user/<yourname>.toml
+# and copy only the keys you want to change.
+
+[camera]
+device_index = 0
+width        = 1280
+height       = 720
+fps          = 30.0
+
+[tracking]
+max_num_hands              = 2
+min_detection_confidence   = 0.70
+min_tracking_confidence    = 0.50
+model_complexity           = 1
+
+[gesture]
+steering_smoothing_alpha   = 0.15
+steering_deadzone          = 0.05
+steering_sensitivity       = 1.0
+steering_curve_exponent    = 3.0
+max_steering_angle         = 30.0
+steering_auto_center_rate  = 0.15
+steering_preferred_hand    = "right"
+throttle_deadzone          = 0.05
+brake_z_threshold          = -0.10
+handbrake_hold_frames      = 3
+horn_hold_frames           = 2
+
+[controller]
+type            = "xbox"     # "xbox" | "null"
+rumble_enabled  = false
+
+[active_game]
+plugin_id = "forza_horizon"
+
+[active_profile]
+name = "default"
+
+[logging]
+level        = "INFO"
+file         = "logs/gesturedrive.log"
+max_bytes    = 10485760   # 10 MB
+backup_count = 5
+
+[diagnostics]
+fps_window_frames            = 60
+performance_interval_seconds = 5.0
+
+[calibration]
+countdown_duration         = 3.0
+min_steering_range         = 10.0
+max_allowed_steering_range = 90.0
+calibration_file_location  = "profiles/default_calibration.json"
+required_frames_per_step   = 30
+
