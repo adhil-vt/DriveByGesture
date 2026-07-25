@@ -44,7 +44,8 @@ class CalibrationData:
     maximum_left: float = -45.0
     maximum_right: float = 45.0
     calibration_date: str = field(default_factory=_get_utc_now_iso)
-    version: str = "1.0"
+    camera_mode: str = "mirrored"
+    version: Any = 1
 
     @property
     def left_range(self) -> float:
@@ -68,24 +69,30 @@ class CalibrationData:
     def to_dict(self) -> Dict[str, Any]:
         """Serialize calibration data to JSON-serializable dictionary."""
         return {
+            "version": self.version,
+            "calibrated_at": self.calibration_date,
+            "calibration_date": self.calibration_date,
+            "camera_mode": self.camera_mode,
             "center_angle": self.center_angle,
             "left_limit": self.left_limit,
             "right_limit": self.right_limit,
+            "steering_range": round(self.total_range, 2),
+            "minimum_threshold": 8.0,
             "maximum_left": self.maximum_left,
             "maximum_right": self.maximum_right,
-            "calibration_date": self.calibration_date,
-            "version": self.version,
         }
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> CalibrationData:
         """Construct CalibrationData from dictionary with safe key lookups."""
+        cal_date = data.get("calibrated_at") or data.get("calibration_date") or _get_utc_now_iso()
         return cls(
             center_angle=float(data.get("center_angle", 0.0)),
             left_limit=float(data.get("left_limit", -30.0)),
             right_limit=float(data.get("right_limit", 30.0)),
             maximum_left=float(data.get("maximum_left", -45.0)),
             maximum_right=float(data.get("maximum_right", 45.0)),
-            calibration_date=str(data.get("calibration_date", _get_utc_now_iso())),
-            version=str(data.get("version", "1.0")),
+            calibration_date=str(cal_date),
+            camera_mode=str(data.get("camera_mode", "mirrored")),
+            version=data.get("version", 1),
         )

@@ -33,3 +33,12 @@ class CalibrationConfig:
     max_allowed_steering_range: float = D.CALIBRATION_MAX_ALLOWED_STEERING_RANGE
     calibration_file_location: str = D.CALIBRATION_FILE_LOCATION
     required_frames_per_step: int = D.CALIBRATION_REQUIRED_FRAMES_PER_STEP
+    min_movement_threshold: float = D.CALIBRATION_MIN_MOVEMENT_THRESHOLD
+    stable_hold_duration: float = D.CALIBRATION_STABLE_HOLD_DURATION
+    success_message_duration: float = D.CALIBRATION_SUCCESS_MESSAGE_DURATION
+    instruction_display_duration: float = D.CALIBRATION_INSTRUCTION_DISPLAY_DURATION
+    validation_timeout: float = D.CALIBRATION_VALIDATION_TIMEOUT
+    review_screen_duration: float = D.CALIBRATION_REVIEW_SCREEN_DURATION
+    camera_mirrored: bool = D.CALIBRATION_CAMERA_MIRRORED
+    transition_pause_duration: float = D.CALIBRATION_TRANSITION_PAUSE_DURATION
+    transition_countdown_duration: float = D.CALIBRATION_TRANSITION_COUNTDOWN_DURATION

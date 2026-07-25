@@ -95,3 +95,26 @@ class CalibrationStorage:
         except (json.JSONDecodeError, OSError, ValueError) as exc:
             logger.error("Failed to load calibration profile from %s: %s", target, exc)
             return None
+
+    def exists(self, filepath: Optional[Union[str, Path]] = None) -> bool:
+        """Return True if calibration file exists on disk."""
+        target = Path(filepath) if filepath else self.default_filepath
+        return target.exists() and target.is_file()
+
+    def delete(self, filepath: Optional[Union[str, Path]] = None) -> bool:
+        """
+        Delete saved calibration JSON file from disk.
+
+        Returns True if file was deleted, False if file did not exist.
+        """
+        target = Path(filepath) if filepath else self.default_filepath
+        if target.exists() and target.is_file():
+            try:
+                target.unlink()
+                logger.info("Deleted calibration file at %s", target)
+                return True
+            except OSError as exc:
+                logger.error("Failed to delete calibration file at %s: %s", target, exc)
+                return False
+        return False
+

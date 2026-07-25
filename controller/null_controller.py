@@ -67,3 +67,40 @@ class NullController(IVirtualController):
     @property
     def is_connected(self) -> bool:
         return self._connected
+
+    def set_left_trigger(self, value: object) -> None:
+        """No-op set_left_trigger."""
+        pass
+
+    def set_right_trigger(self, value: object) -> None:
+        """No-op set_right_trigger."""
+        pass
+
+    def set_left_stick(self, x: object, y: object) -> None:
+        """No-op set_left_stick."""
+        pass
+
+    def set_right_stick(self, x: object, y: object) -> None:
+        """No-op set_right_stick."""
+        pass
+
+    def press_button(self, button: str) -> None:
+        """No-op press_button."""
+        pass
+
+    def release_button(self, button: str) -> None:
+        """No-op release_button."""
+        pass
+
+    def press_dpad(self, direction: str) -> None:
+        """No-op press_dpad."""
+        pass
+
+    def release_dpad(self) -> None:
+        """No-op release_dpad."""
+        pass
+
+    def update(self) -> None:
+        """No-op update."""
+        pass
+

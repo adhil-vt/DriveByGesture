@@ -52,6 +52,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import cv2
 
 from actions import ActionEngine, ActionState, ActionType
+from calibration.calibration_manager import CalibrationManager
+from calibration.calibration_overlay import render_calibration_overlay
+from calibration.calibration_session import CalibrationStep
 from camera.camera import OpenCVCameraSource
 from config.schema import CameraConfig, GestureConfig, TrackingConfig
 from controller import NullController, IVirtualController, VirtualXboxController, XboxController, XboxOutputPlugin
@@ -134,8 +137,9 @@ def _draw_hud(
     result: TrackingResult,
     action_state: Optional[ActionState] = None,
     controller: Optional[IVirtualController] = None,
+    calibration_manager: Optional[CalibrationManager] = None,
 ) -> None:
-    """Render top-left HUD overlay showing FPS, hand count, and pipeline status."""
+    """Render top-left HUD overlay showing FPS, hand count, calibration status, and pipeline controls."""
     h, w = image.shape[:2]
 
     # Top-left panel
@@ -153,8 +157,19 @@ def _draw_hud(
         _put(image, label, _PAD, y, _FONT_SCALE_SMALL, color)
         y += _LINE_H
 
+    # Calibration Status line
+    if calibration_manager is not None:
+        cal_active = calibration_manager.active_calibration is not None
+        cal_str = "Loaded" if cal_active else "Default"
+        cal_color = (0, 255, 120) if cal_active else (200, 200, 200)
+        _put(image, f"Calibration: {cal_str}", _PAD, y, _FONT_SCALE_SMALL, cal_color)
+        y += _LINE_H
+
     # Bottom-left hint
-    _put(image, "Press Q to quit", _PAD, h - _PAD, _FONT_SCALE_SMALL, _COLOR_WHITE)
+    if calibration_manager is not None and calibration_manager.is_session_active:
+        _put(image, "[ESC] Cancel Calibration | [Q] Quit", _PAD, h - _PAD, _FONT_SCALE_SMALL, _COLOR_WHITE)
+    else:
+        _put(image, "[C] Calibrate | [R] Reset | [Q] Quit", _PAD, h - _PAD, _FONT_SCALE_SMALL, _COLOR_WHITE)
 
 
 def _draw_gesture_display_panels(
@@ -453,6 +468,8 @@ def run_demo(args: argparse.Namespace) -> int:
 
     # End-to-End Pipeline Services: ActionEngine & Controller Output
     action_engine = ActionEngine()
+    calibration_manager = CalibrationManager()
+    calibration_manager.bind_steering_pipeline(action_engine)
 
     xbox_controller: IVirtualController = XboxController()
     try:
@@ -514,6 +531,7 @@ def run_demo(args: argparse.Namespace) -> int:
 
             fps_counter.tick()
 
+            analyses: List[HandAnalysis] = []
             if result.hands:
                 # 1. Analyze finger states & hand posture
                 analyses = hand_analyzer.analyze_hands(result.hands)
@@ -536,8 +554,13 @@ def run_demo(args: argparse.Namespace) -> int:
                 action_state = action_engine.process([], [])
                 xbox_plugin.process(action_state)
 
+            # Interactive Calibration Wizard processing
+            if calibration_manager.is_session_active:
+                snap = calibration_manager.session.process_frame(analyses)
+                render_calibration_overlay(result.annotated_image, snap)
+
             # Overlay HUD
-            _draw_hud(result.annotated_image, fps_counter.fps, result, action_state, xbox_controller)
+            _draw_hud(result.annotated_image, fps_counter.fps, result, action_state, xbox_controller, calibration_manager)
 
             # Display frame
             cv2.imshow(window_name, result.annotated_image)
@@ -546,6 +569,29 @@ def run_demo(args: argparse.Namespace) -> int:
             if key in (ord("q"), ord("Q")):
                 logger.info("User pressed Q — shutting down demo.")
                 break
+            elif key in (ord("s"), ord("S")):
+                if calibration_manager.session.current_step == CalibrationStep.SUMMARY:
+                    data = calibration_manager.accept_and_save_session()
+                    if data is not None:
+                        action_engine.steering_pipeline.set_calibration(data)
+                        logger.info("Calibration Saved")
+            elif key in (ord("c"), ord("C")):
+                if not calibration_manager.is_session_active:
+                    calibration_manager.start_session()
+                    logger.info("Calibration Started")
+            elif key in (ord("r"), ord("R")):
+                if calibration_manager.session.current_step == CalibrationStep.SUMMARY:
+                    calibration_manager.recalibrate()
+                    logger.info("Recalibrating session from Step 1.")
+                else:
+                    msg = calibration_manager.reset_calibration()
+                    action_engine.steering_pipeline.set_calibration(None)
+                    logger.info(msg)
+            elif key == 27:  # ESC key
+                if calibration_manager.is_session_active:
+                    msg = calibration_manager.cancel_session()
+                    action_engine.steering_pipeline.set_calibration(calibration_manager.active_calibration)
+                    logger.info(msg)
 
             if cv2.getWindowProperty(window_name, cv2.WND_PROP_VISIBLE) < 1:
                 logger.info("Window closed — shutting down demo.")
