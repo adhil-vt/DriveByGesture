@@ -212,14 +212,25 @@ class CalibrationSession:
         # Step 1: CENTER
         if self._step == CalibrationStep.CENTER:
             if self._phase == "MONITORING":
-                elapsed = now - self._step_start_time
-                if elapsed >= self.config.countdown_duration or len(self._samples) >= self.config.required_frames_per_step:
-                    self._center_angle = round(statistics.median(self._samples), 2)
-                    self._phase = "SUCCESS_PAUSE"
-                    self._phase_start_time = now
-                    self._status_message = "✓ Center Captured"
-                    if self.on_step_captured:
-                        self.on_step_captured(CalibrationStep.CENTER, self._center_angle)
+                # Allow user's natural comfortable straight-ahead posture (within ±30° initial bounds)
+                if abs(angle_deg) > 30.0:
+                    self._stable_hold_time = 0.0
+                    self._status_message = "Hold your hand straight ahead in natural center position."
+                else:
+                    if abs(angle_deg - self._last_stable_angle) < 3.0:
+                        self._stable_hold_time += dt
+                    else:
+                        self._stable_hold_time = 0.0
+                    self._last_stable_angle = angle_deg
+                    self._status_message = f"Holding natural center... ({self._stable_hold_time:.1f}s)"
+
+                    if self._stable_hold_time >= self.config.stable_hold_duration or len(self._samples) >= self.config.required_frames_per_step * 2:
+                        self._center_angle = round(statistics.median(self._samples), 2)
+                        self._phase = "SUCCESS_PAUSE"
+                        self._phase_start_time = now
+                        self._status_message = "✓ Center Captured"
+                        if self.on_step_captured:
+                            self.on_step_captured(CalibrationStep.CENTER, self._center_angle)
             if self._phase == "SUCCESS_PAUSE":
                 if (now - self._phase_start_time) >= self.config.success_message_duration or self.config.success_message_duration <= 0.0:
                     self._transition_to(CalibrationStep.LEFT)
@@ -230,10 +241,10 @@ class CalibrationSession:
                 delta = angle_deg - (self._center_angle or 0.0)
                 if delta > 5.0:
                     self._stable_hold_time = 0.0
-                    self._status_message = "Wrong direction detected. Rotate RIGHT." if self.config.camera_mirrored else "Wrong direction detected. Rotate LEFT."
+                    self._status_message = "Wrong direction detected. Rotate LEFT."
                 elif delta > -self.config.min_movement_threshold:
                     self._stable_hold_time = 0.0
-                    self._status_message = "Rotate further RIGHT." if self.config.camera_mirrored else "Rotate further LEFT."
+                    self._status_message = "Rotate further LEFT."
                 else:
                     # Valid left rotation detected
                     if abs(angle_deg - self._last_stable_angle) < 3.0:
@@ -261,10 +272,10 @@ class CalibrationSession:
                 delta = angle_deg - (self._center_angle or 0.0)
                 if delta < -5.0:
                     self._stable_hold_time = 0.0
-                    self._status_message = "Wrong direction detected. Rotate LEFT." if self.config.camera_mirrored else "Wrong direction detected. Rotate RIGHT."
+                    self._status_message = "Wrong direction detected. Rotate RIGHT."
                 elif delta < self.config.min_movement_threshold:
                     self._stable_hold_time = 0.0
-                    self._status_message = "Rotate further LEFT." if self.config.camera_mirrored else "Rotate further RIGHT."
+                    self._status_message = "Rotate further RIGHT."
                 else:
                     # Valid right rotation detected
                     if abs(angle_deg - self._last_stable_angle) < 3.0:
@@ -359,7 +370,8 @@ class CalibrationSession:
         wrist = lms[0]
         middle_mcp = lms[9]
 
-        dx = middle_mcp.x - wrist.x
+        # Physical user coordinate system (Physical LEFT -> negative angle, Physical RIGHT -> positive angle)
+        dx = wrist.x - middle_mcp.x
         dy = middle_mcp.y - wrist.y
 
         # In image space, y points down. Vector pointing up is (dx, -dy).
@@ -451,32 +463,30 @@ class CalibrationSession:
             instruction = "Calibration Failed. Please recalibrate."
             ratio = 0.0
 
-        # Adapted instruction for camera preview mirroring and transition phase
+        # Instruction for transition phase and monitoring step
         if self._phase == "TRANSITION_PAUSE":
             if self._step == CalibrationStep.LEFT:
-                disp_instruction = "Next: Rotate RIGHT" if self.config.camera_mirrored else "Next: Rotate LEFT"
+                disp_instruction = "Next: Rotate LEFT"
             elif self._step == CalibrationStep.RIGHT:
-                disp_instruction = "Next: Rotate LEFT" if self.config.camera_mirrored else "Next: Rotate RIGHT"
+                disp_instruction = "Next: Rotate RIGHT"
             elif self._step == CalibrationStep.SUMMARY:
                 disp_instruction = "Preparing Calibration Summary..."
             else:
                 disp_instruction = instruction
         elif self._phase == "TRANSITION_COUNTDOWN":
             if self._step == CalibrationStep.LEFT:
-                target_str = "Rotate your hand fully RIGHT" if self.config.camera_mirrored else "Rotate your hand fully LEFT"
-                disp_instruction = f"{target_str} (Starting in {countdown}...)"
+                disp_instruction = f"Rotate your hand fully LEFT (Starting in {countdown}...)"
             elif self._step == CalibrationStep.RIGHT:
-                target_str = "Rotate your hand fully LEFT" if self.config.camera_mirrored else "Rotate your hand fully RIGHT"
-                disp_instruction = f"{target_str} (Starting in {countdown}...)"
+                disp_instruction = f"Rotate your hand fully RIGHT (Starting in {countdown}...)"
             elif self._step == CalibrationStep.SUMMARY:
                 disp_instruction = f"Preparing Calibration Summary ({countdown}...)"
             else:
                 disp_instruction = instruction
         else:
             if self._step == CalibrationStep.LEFT:
-                disp_instruction = "Rotate your hand fully RIGHT." if self.config.camera_mirrored else "Rotate your hand fully LEFT."
+                disp_instruction = "Rotate your hand fully LEFT."
             elif self._step == CalibrationStep.RIGHT:
-                disp_instruction = "Rotate your hand fully LEFT." if self.config.camera_mirrored else "Rotate your hand fully RIGHT."
+                disp_instruction = "Rotate your hand fully RIGHT."
             else:
                 disp_instruction = instruction
 

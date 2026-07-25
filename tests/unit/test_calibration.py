@@ -157,6 +157,28 @@ class TestCalibrationSession(unittest.TestCase):
         self.assertTrue(session.accept_summary())
         self.assertEqual(session.current_step, CalibrationStep.COMPLETE)
 
+    def test_natural_center_offset_sampling(self):
+        """User's natural comfortable center angle (e.g. -0.2 deg) is sampled and saved as center_angle."""
+        cfg = CalibrationConfig(
+            countdown_duration=0.001,
+            stable_hold_duration=0.05,
+            success_message_duration=0.0,
+            transition_pause_duration=0.0,
+            transition_countdown_duration=0.0,
+            camera_mirrored=False,
+            required_frames_per_step=1,
+        )
+        session = CalibrationSession(cfg)
+        session.start()
+
+        # Natural hand posture (dx=-0.001, ~ -0.2 deg tilt) -> Sampled and accepted after 0.05s hold
+        hand_natural = make_mock_hand_analysis(dx=-0.001, dy=-0.20)
+        session.process_frame([hand_natural])
+        time.sleep(0.06)
+        session.process_frame([hand_natural])
+        self.assertEqual(session.current_step, CalibrationStep.LEFT)
+        self.assertAlmostEqual(session.center_angle, -0.29, delta=0.5)
+
     def test_step_transition_delay_and_evaluation_suppression(self):
         """Test step transition delay suppresses steering direction evaluation until countdown completes."""
         cfg_trans = CalibrationConfig(
@@ -284,7 +306,7 @@ class TestCalibrationSession(unittest.TestCase):
         self.assertEqual(captured_steps[0][0], CalibrationStep.CENTER)
 
     def test_mirrored_camera_instruction_swapping(self):
-        """When camera_mirrored=True, internal LEFT displays 'Rotate your hand fully RIGHT.'."""
+        """When camera_mirrored=True, snapshot camera_mode is 'Mirrored' and instruction is 'Rotate your hand fully LEFT.'."""
         cfg_mirrored = CalibrationConfig(
             countdown_duration=0.001,
             stable_hold_duration=0.0,
@@ -306,7 +328,7 @@ class TestCalibrationSession(unittest.TestCase):
         self.assertEqual(session.current_step, CalibrationStep.LEFT)
         snap_left = session.process_frame([hand_center])
         self.assertEqual(snap_left.camera_mode, "Mirrored")
-        self.assertEqual(snap_left.displayed_instruction, "Rotate your hand fully RIGHT.")
+        self.assertEqual(snap_left.displayed_instruction, "Rotate your hand fully LEFT.")
 
     def test_normal_camera_instruction_behavior(self):
         """When camera_mirrored=False, internal LEFT displays 'Rotate your hand fully LEFT.'."""

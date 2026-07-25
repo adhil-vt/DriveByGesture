@@ -106,6 +106,8 @@ class ActionEngine:
             steering_deadzone_active=diag.deadzone_active,
             steering_sensitivity=diag.sensitivity,
             steering_curve_output=diag.curve_output,
+            raw_sensor_angle=diag.raw_sensor_angle,
+            adjusted_steering_angle=diag.adjusted_steering_angle,
         )
 
     def calculate_steering(self, hand_analyses: Optional[Sequence[HandAnalysis]] = None) -> float:
@@ -140,7 +142,8 @@ class ActionEngine:
         wrist = lms[0]
         middle_mcp = lms[9]
 
-        dx = middle_mcp.x - wrist.x
+        # Physical user coordinate system (Physical LEFT -> negative angle/steering, Physical RIGHT -> positive angle/steering)
+        dx = wrist.x - middle_mcp.x
         dy = middle_mcp.y - wrist.y
 
         # In image space, y points down. Vector pointing up is (dx, -dy).

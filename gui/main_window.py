@@ -9,8 +9,8 @@ from __future__ import annotations
 
 import logging
 import numpy as np
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QCloseEvent, QIcon
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QCloseEvent
 from PySide6.QtWidgets import (
     QApplication,
     QHBoxLayout,
@@ -20,8 +20,10 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from gui.calibration_dialog import CalibrationDialog
 from gui.camera_widget import CameraWidget
 from gui.control_panel import ControlPanelWidget
+from gui.settings_dialog import SettingsDialog
 from gui.status_bar import StatusBarWidget
 from gui.styles import DARK_THEME_QSS
 from gui.telemetry_panel import TelemetryPanel
@@ -41,9 +43,9 @@ class MainWindow(QMainWindow):
 
         self.setWindowTitle("DriveByGesture")
         self.resize(1400, 850)
-        self.setMinimumSize(1100, 700)
+        self.setMinimumSize(1280, 800)
 
-        # Apply dark theme
+        # Apply commercial dark theme QSS
         self.setStyleSheet(DARK_THEME_QSS)
 
         # Central Widget & Root Layout
@@ -58,15 +60,15 @@ class MainWindow(QMainWindow):
         self.top_bar = TopBarWidget()
         root_layout.addWidget(self.top_bar)
 
-        # 2. Main Dashboard Area (Left: Camera Preview, Right: Telemetry Panel)
+        # 2. Main Dashboard Area (Left Area ≈ 70%: Camera Preview, Right Area ≈ 30%: Telemetry Panel)
         dash_layout = QHBoxLayout()
         dash_layout.setSpacing(14)
 
         self.camera_widget = CameraWidget()
         self.telemetry_panel = TelemetryPanel()
 
-        dash_layout.addWidget(self.camera_widget, stretch=3)
-        dash_layout.addWidget(self.telemetry_panel, stretch=1)
+        dash_layout.addWidget(self.camera_widget, stretch=7)
+        dash_layout.addWidget(self.telemetry_panel, stretch=3)
 
         root_layout.addLayout(dash_layout, stretch=1)
 
@@ -78,12 +80,15 @@ class MainWindow(QMainWindow):
         self.control_panel = ControlPanelWidget()
         root_layout.addWidget(self.control_panel)
 
-        # Worker Thread
+        # Worker Thread & Active Dialog handles
         self.worker: PipelineWorker | None = None
+        self.active_calib_dialog: CalibrationDialog | None = None
 
         # Connect Control Panel signals
         self.control_panel.start_requested.connect(self.start_pipeline)
         self.control_panel.stop_requested.connect(self.stop_pipeline)
+        self.control_panel.calibrate_requested.connect(self.open_calibration_wizard)
+        self.control_panel.settings_requested.connect(self.open_settings_window)
         self.control_panel.exit_requested.connect(self.close)
 
     def start_pipeline(self) -> None:
@@ -113,18 +118,69 @@ class MainWindow(QMainWindow):
 
         self._on_worker_finished()
 
+    def open_calibration_wizard(self) -> None:
+        """Launch graphical Calibration Wizard dialog."""
+        if self.worker is None or not self.worker.isRunning():
+            self.start_pipeline()
+            # Brief wait for worker initialization
+            QApplication.processEvents()
+
+        if self.worker is None or self.worker.calibration_manager is None:
+            QMessageBox.warning(self, "Calibration Error", "Pipeline worker is not initialized.")
+            return
+
+        logger.info("Opening Calibration Wizard dialog...")
+        dialog = CalibrationDialog(self.worker.calibration_manager, self)
+        self.active_calib_dialog = dialog
+        result = dialog.exec()
+        self.active_calib_dialog = None
+
+        if result == CalibrationDialog.DialogCode.Accepted:
+            self.status_bar_widget.set_component_status("Calibration", "Loaded", "good")
+
+    def open_settings_window(self) -> None:
+        """Launch graphical Settings & Configuration dialog."""
+        if self.worker is None or not self.worker.isRunning():
+            self.start_pipeline()
+            QApplication.processEvents()
+
+        if self.worker is None or self.worker.calibration_manager is None:
+            QMessageBox.warning(self, "Settings Error", "Pipeline worker is not initialized.")
+            return
+
+        logger.info("Opening Settings dialog...")
+        dialog = SettingsDialog(self.worker.calibration_manager, self)
+        dialog.config_applied.connect(self._on_live_config_applied)
+        dialog.open_wizard_requested.connect(self.open_calibration_wizard)
+        dialog.exec()
+
+    def _on_live_config_applied(self, camera_config, steering_config) -> None:
+        """Apply live configuration changes defensively to UI and worker pipeline thread."""
+        try:
+            if camera_config and hasattr(camera_config, "mirror_preview"):
+                self.camera_widget.mirror_preview = getattr(camera_config, "mirror_preview", True)
+
+            if self.worker:
+                self.worker.apply_live_config(camera_config, steering_config)
+                logger.info("Live configuration updated on MainWindow.")
+        except Exception as exc:
+            logger.warning("MainWindow live configuration update skipped safely: %s", exc)
+
     def _on_frame_processed(self, frame: np.ndarray, fps: float, telemetry: dict) -> None:
         """Handle incoming processed video frame and live telemetry metrics."""
-        self.camera_widget.update_frame(frame)
+        self.camera_widget.update_frame(frame, overlay_info=telemetry)
         self.top_bar.update_fps(fps)
         self.top_bar.update_status("Running", "#00e676")
-
-        self.telemetry_panel.update_telemetry(
-            steering_angle=telemetry.get("steering_angle", 0.0),
-            gesture=telemetry.get("gesture", "None"),
-            action=telemetry.get("action", "Idle"),
-            controller=telemetry.get("controller", "Ready"),
+        self.top_bar.update_info(
+            profile_name=telemetry.get("profile_name"),
+            camera_name=telemetry.get("camera_name"),
         )
+        self.telemetry_panel.update_telemetry_data(telemetry)
+
+        # Route calibration frame and snapshot to active dialog if open
+        if self.active_calib_dialog is not None and self.active_calib_dialog.isVisible():
+            snap = telemetry.get("calibration_snapshot")
+            self.active_calib_dialog.update_telemetry_frame(frame, snap)
 
     def _on_status_changed(self, component: str, status_str: str, state: str) -> None:
         """Update status bar indicators from worker thread."""
@@ -139,7 +195,7 @@ class MainWindow(QMainWindow):
     def _on_worker_finished(self) -> None:
         """Called when worker thread stops or terminates."""
         self.control_panel.set_pipeline_running(False)
-        self.top_bar.update_status("Stopped", "#6c6c84")
+        self.top_bar.update_status("Stopped", "#8f96a3")
         self.top_bar.update_fps(0.0)
         self.camera_widget.show_offline_banner("Camera Offline")
 

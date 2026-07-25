@@ -79,16 +79,16 @@ class TestActionEngine(unittest.TestCase):
         self.assertEqual(state.steering, 0.0)
 
     def test_steering_right_tilt(self):
-        # Tilt right (dx=0.10, dy=-0.20) -> ~26.5 deg tilt -> ~0.88 normalized
-        hand_right = make_hand_analysis(dx=0.10, dy=-0.20)
+        # Physical tilt right -> hand moves to user's right (landmark dx=-0.10 relative to wrist in raw sensor space)
+        hand_right = make_hand_analysis(dx=-0.10, dy=-0.20)
         state = self.engine.process([], [hand_right])
         self.assertGreater(state.steering, 0.50)
         self.assertLessEqual(state.steering, 1.0)
         self.assertTrue(state.has_action(ActionType.STEERING))
 
     def test_steering_left_tilt(self):
-        # Tilt left (dx=-0.10, dy=-0.20) -> ~ -26.5 deg tilt -> negative steering
-        hand_left = make_hand_analysis(dx=-0.10, dy=-0.20)
+        # Physical tilt left -> hand moves to user's left (landmark dx=+0.10 relative to wrist in raw sensor space)
+        hand_left = make_hand_analysis(dx=0.10, dy=-0.20)
         state = self.engine.process([], [hand_left])
         self.assertLess(state.steering, -0.50)
         self.assertGreaterEqual(state.steering, -1.0)

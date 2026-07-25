@@ -1,7 +1,7 @@
 """
 gesturedrive.gui.control_panel
 ==============================
-Bottom control panel widget providing Start, Stop, Calibrate, Settings, and Exit action buttons.
+Bottom control panel widget providing Start, Stop, Calibrate, Settings, and Exit action buttons with standardized height and styling.
 """
 
 from __future__ import annotations
@@ -17,6 +17,8 @@ class ControlPanelWidget(QFrame):
 
     start_requested = Signal()
     stop_requested = Signal()
+    calibrate_requested = Signal()
+    settings_requested = Signal()
     exit_requested = Signal()
 
     def __init__(self, parent=None) -> None:
@@ -24,33 +26,33 @@ class ControlPanelWidget(QFrame):
         self.setObjectName("controlPanel")
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(20, 12, 20, 12)
-        layout.setSpacing(14)
+        layout.setContentsMargins(16, 10, 16, 10)
+        layout.setSpacing(12)
 
-        # 1. Start Button
-        self.btn_start = QPushButton("▶  Start Pipeline")
+        # 1. Start Button (Primary Teal/Cyan Accent)
+        self.btn_start = QPushButton("▶   Start Pipeline")
         self.btn_start.setObjectName("btnStart")
 
-        # 2. Stop Button
-        self.btn_stop = QPushButton("⏹  Stop Pipeline")
+        # 2. Stop Button (Danger Red Accent)
+        self.btn_stop = QPushButton("⏹   Stop Pipeline")
         self.btn_stop.setObjectName("btnStop")
         self.btn_stop.setEnabled(False)
 
-        # 3. Calibrate Button ("Coming Soon" for Phase 9.2)
-        self.btn_calibrate = QPushButton("🎯  Calibrate")
+        # 3. Calibrate Button (Secondary Dark Slate)
+        self.btn_calibrate = QPushButton("🎯   Calibrate")
         self.btn_calibrate.setObjectName("btnCalibrate")
 
-        # 4. Settings Button ("Coming Soon" for Phase 9.2)
-        self.btn_settings = QPushButton("⚙  Settings")
+        # 4. Settings Button (Secondary Dark Slate)
+        self.btn_settings = QPushButton("⚙   Settings")
         self.btn_settings.setObjectName("btnSettings")
 
-        # 5. Exit Button
-        self.btn_exit = QPushButton("✕  Exit")
+        # 5. Exit Button (Neutral Slate)
+        self.btn_exit = QPushButton("✕   Exit")
         self.btn_exit.setObjectName("btnExit")
 
         layout.addWidget(self.btn_start)
         layout.addWidget(self.btn_stop)
-        layout.addSpacing(10)
+        layout.addSpacing(12)
         layout.addWidget(self.btn_calibrate)
         layout.addWidget(self.btn_settings)
         layout.addStretch()
@@ -78,16 +80,7 @@ class ControlPanelWidget(QFrame):
         self.exit_requested.emit()
 
     def _on_calibrate_clicked(self) -> None:
-        QMessageBox.information(
-            self,
-            "Calibrate",
-            "Full Calibration Wizard GUI is coming soon in Phase 9.2!\n\n"
-            "Keyboard shortcut [C] in preview demo is supported by backend.",
-        )
+        self.calibrate_requested.emit()
 
     def _on_settings_clicked(self) -> None:
-        QMessageBox.information(
-            self,
-            "Settings",
-            "Application Settings & Profile Manager GUI coming soon in Phase 9.2!",
-        )
+        self.settings_requested.emit()

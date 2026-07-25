@@ -2,18 +2,22 @@
 gesturedrive.gui.styles
 =======================
 Styles, color tokens, and QSS dark theme for DriveByGesture PySide6 desktop interface.
+Inspired by commercial software (Logitech G Hub, OBS Studio, SimHub).
 """
 
 from __future__ import annotations
 
-# Color Palette Constants
-COLOR_BG_DARK = "#101014"
-COLOR_BG_CARD = "#1a1a22"
-COLOR_BG_PANEL = "#16161e"
-COLOR_BORDER = "#2e2e3e"
+# Color Palette Tokens
+COLOR_BG_DARK = "#0d0e12"
+COLOR_BG_PANEL = "#14161f"
+COLOR_BG_CARD = "#1a1d28"
+COLOR_BG_CARD_HOVER = "#202432"
+COLOR_BORDER = "#282c3c"
+
+# Typography Colors
 COLOR_TEXT_PRIMARY = "#ffffff"
-COLOR_TEXT_SECONDARY = "#a0a0b8"
-COLOR_TEXT_MUTED = "#6c6c84"
+COLOR_TEXT_SECONDARY = "#8f96a3"
+COLOR_TEXT_MUTED = "#5b616e"
 
 # Accent Colors
 COLOR_ACCENT_CYAN = "#00e5ff"
@@ -24,7 +28,7 @@ COLOR_ACCENT_BLUE = "#2979ff"
 
 DARK_THEME_QSS = """
 QMainWindow {
-    background-color: #101014;
+    background-color: #0d0e12;
     color: #ffffff;
 }
 
@@ -34,72 +38,100 @@ QWidget {
     color: #ffffff;
 }
 
-/* Card / Container Panels */
+/* Card Containers & Panels */
 QFrame#topBar, QFrame#cameraCard, QFrame#telemetryCard, QFrame#statusBar, QFrame#controlPanel {
-    background-color: #181820;
-    border: 1px solid #2a2a3a;
+    background-color: #14161f;
+    border: 1px solid #282c3c;
     border-radius: 10px;
 }
 
 QFrame#statusCard {
-    background-color: #1f1f2a;
-    border: 1px solid #2e2e40;
-    border-radius: 8px;
+    background-color: #1a1d28;
+    border: 1px solid #282c3c;
+    border-radius: 10px;
+}
+
+QFrame#statusCard:hover {
+    border-color: #363b50;
+    background-color: #1c202d;
 }
 
 /* Typography & Titles */
 QLabel#appTitle {
-    font-size: 20px;
-    font-weight: bold;
+    font-size: 22px;
+    font-weight: 800;
     color: #00e5ff;
-    letter-spacing: 1px;
+    letter-spacing: 1.5px;
 }
 
 QLabel#sectionTitle {
-    font-size: 14px;
-    font-weight: 600;
-    color: #a0a0b8;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-
-QLabel#telemetryValue {
-    font-size: 22px;
-    font-weight: bold;
-    color: #00e5ff;
+    font-size: 13px;
+    font-weight: 700;
+    color: #8f96a3;
+    letter-spacing: 1px;
 }
 
 QLabel#telemetryLabel {
+    font-size: 11px;
+    font-weight: 600;
+    color: #8f96a3;
+    text-transform: uppercase;
+}
+
+QLabel#telemetryValue {
+    font-size: 18px;
+    font-weight: 700;
+    color: #00e5ff;
+}
+
+/* Pill Badges & Chips */
+QLabel#pillBadge {
+    background-color: #11131a;
+    color: #8f96a3;
     font-size: 12px;
-    color: #a0a0b8;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 14px;
+    border: 1px solid #282c3c;
+}
+
+QLabel#statusChip {
+    background-color: #11131a;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 14px;
+    border-radius: 14px;
+    border: 1px solid #282c3c;
 }
 
 /* Buttons */
 QPushButton {
-    background-color: #242432;
+    background-color: #202434;
     color: #ffffff;
-    border: 1px solid #38384d;
+    border: 1px solid #32384e;
     border-radius: 8px;
-    padding: 10px 20px;
+    padding: 0px 18px;
+    height: 40px;
+    min-height: 40px;
     font-size: 13px;
     font-weight: 600;
-    min-width: 100px;
 }
 
 QPushButton:hover {
-    background-color: #2e2e42;
+    background-color: #2a3044;
     border-color: #00e5ff;
     color: #00e5ff;
 }
 
 QPushButton:pressed {
-    background-color: #1a1a26;
+    background-color: #181b28;
 }
 
 QPushButton:disabled {
-    background-color: #161620;
-    color: #4a4a60;
-    border-color: #222230;
+    background-color: #141620;
+    color: #484e5e;
+    border-color: #222634;
 }
 
 /* Special Button Variants */
@@ -112,6 +144,7 @@ QPushButton#btnStart {
 QPushButton#btnStart:hover {
     background-color: #00bfa5;
     border-color: #64ffda;
+    color: #ffffff;
 }
 
 QPushButton#btnStop {
@@ -123,41 +156,69 @@ QPushButton#btnStop {
 QPushButton#btnStop:hover {
     background-color: #e53935;
     border-color: #ff5252;
+    color: #ffffff;
 }
 
 QPushButton#btnExit {
-    background-color: #37474f;
-    border-color: #546e7a;
+    background-color: #2c343a;
+    border-color: #455a64;
     color: #eceff1;
 }
 
 QPushButton#btnExit:hover {
-    background-color: #455a64;
-    border-color: #90a4ae;
+    background-color: #37474f;
+    border-color: #78909c;
+    color: #ffffff;
 }
 
-/* Status Bar & Indicators */
-QLabel#statusIndicator {
-    font-weight: bold;
-    font-size: 12px;
-    padding: 3px 8px;
+/* QProgressBar Styling */
+QProgressBar {
+    background-color: #11131a;
+    border: 1px solid #282c3c;
+    border-radius: 5px;
+    text-align: center;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 600;
+    height: 12px;
+}
+
+QProgressBar::chunk {
+    background-color: #00e5ff;
     border-radius: 4px;
+}
+
+QProgressBar#pbTriggerRT::chunk {
+    background-color: #00e676;
+}
+
+QProgressBar#pbTriggerLT::chunk {
+    background-color: #ff1744;
+}
+
+QProgressBar#pbConfidence::chunk {
+    background-color: #00e5ff;
 }
 
 /* Scrollbars */
 QScrollBar:vertical {
     border: none;
-    background: #14141c;
-    width: 8px;
-    border-radius: 4px;
+    background: #0d0e12;
+    width: 6px;
+    border-radius: 3px;
 }
 
 QScrollBar::handle:vertical {
-    background: #2e2e40;
-    border-radius: 4px;
+    background: #282c3c;
+    border-radius: 3px;
 }
 
 QScrollBar::handle:vertical:hover {
     background: #00e5ff;
+}
+
+QScrollArea {
+    border: none;
+    background: transparent;
 }
 """

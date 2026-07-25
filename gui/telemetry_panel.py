@@ -1,97 +1,131 @@
 """
 gesturedrive.gui.telemetry_panel
 ================================
-Right dashboard telemetry panel for displaying steering wheel metrics, gesture status, and action state.
+Right dashboard telemetry panel assembling vector steering wheel, steering metrics, gesture status,
+controller hardware output, and performance pipeline statistics.
 """
 
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QFrame, QGridLayout, QLabel, QVBoxLayout
+from PySide6.QtWidgets import QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget
+
+from gui.controller_widget import ControllerWidget
+from gui.gesture_widget import GestureWidget
+from gui.stats_widget import PipelineStatsWidget
+from gui.steering_wheel import SteeringWheelWidget
+from gui.steering_widget import SteeringWidget
 
 
 class TelemetryPanel(QFrame):
     """
-    Right panel dashboard containing status cards for steering telemetry, recognized gestures,
-    abstract action states, and controller hardware output status.
+    Right panel dashboard assembling live vector steering wheel, steering metrics, gesture status,
+    controller hardware output, and performance pipeline statistics.
     """
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("telemetryCard")
-        self.setMinimumWidth(320)
-        self.setMaximumWidth(400)
+        self.setMinimumWidth(380)
+        self.setMaximumWidth(440)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 16, 16, 16)
-        layout.setSpacing(12)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(14, 14, 14, 14)
+        main_layout.setSpacing(12)
 
         # Header Title
-        lbl_header = QLabel("PIPELINE TELEMETRY")
+        lbl_header = QLabel("LIVE TELEMETRY DASHBOARD")
         lbl_header.setObjectName("sectionTitle")
-        layout.addWidget(lbl_header)
+        main_layout.addWidget(lbl_header)
 
-        # Grid container for cards
-        grid = QGridLayout()
-        grid.setSpacing(10)
+        # Scroll Area for clean responsiveness on lower resolution screens
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
 
-        # Card 1: Steering Angle
-        card_steering = self._create_card("STEERING ANGLE", "0.0°", "#00e5ff")
-        self.val_steering = card_steering.findChild(QLabel, "telemetryValue")
+        container = QWidget()
+        layout = QVBoxLayout(container)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
-        # Card 2: Detected Gesture
-        card_gesture = self._create_card("DETECTED GESTURE", "None", "#00e676")
-        self.val_gesture = card_gesture.findChild(QLabel, "telemetryValue")
+        # 1. Vector Steering Wheel Widget (Centered, 240x240)
+        wheel_box = QFrame()
+        wheel_box.setObjectName("statusCard")
+        w_layout = QVBoxLayout(wheel_box)
+        w_layout.setContentsMargins(12, 14, 12, 14)
+        w_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
-        # Card 3: Current Action
-        card_action = self._create_card("CURRENT ACTION", "Idle", "#ffb300")
-        self.val_action = card_action.findChild(QLabel, "telemetryValue")
+        self.steering_wheel = SteeringWheelWidget()
+        w_layout.addWidget(self.steering_wheel)
+        layout.addWidget(wheel_box)
 
-        # Card 4: Controller Hardware Status
-        card_controller = self._create_card("CONTROLLER STATUS", "Disconnected", "#a0a0b8")
-        self.val_controller = card_controller.findChild(QLabel, "telemetryValue")
+        # 2. Detailed Steering Metrics & Live Position Bar
+        self.steering_widget = SteeringWidget()
+        layout.addWidget(self.steering_widget)
 
-        layout.addWidget(card_steering)
-        layout.addWidget(card_gesture)
-        layout.addWidget(card_action)
-        layout.addWidget(card_controller)
+        # 3. Gesture & Mapped Action Panel
+        self.gesture_widget = GestureWidget()
+        layout.addWidget(self.gesture_widget)
 
-        # Placeholder Graphic Area for Steering Wheel Visualization (Phase 9.2+)
-        self.wheel_placeholder = QFrame()
-        self.wheel_placeholder.setObjectName("statusCard")
-        self.wheel_placeholder.setMinimumHeight(140)
-        wheel_layout = QVBoxLayout(self.wheel_placeholder)
-        wheel_layout.setAlignment(Qt.AlignCenter)
-        lbl_wheel = QLabel("☸ Steering Wheel Graphic\n(Phase 9.2 Visualization)")
-        lbl_wheel.setAlignment(Qt.AlignCenter)
-        lbl_wheel.setStyleSheet("color: #4a4a60; font-size: 12px; font-weight: bold;")
-        wheel_layout.addWidget(lbl_wheel)
+        # 4. Virtual Controller Panel
+        self.controller_widget = ControllerWidget()
+        layout.addWidget(self.controller_widget)
 
-        layout.addWidget(self.wheel_placeholder)
+        # 5. Pipeline Performance Statistics
+        self.stats_widget = PipelineStatsWidget()
+        layout.addWidget(self.stats_widget)
+
         layout.addStretch()
+        scroll.setWidget(container)
+        main_layout.addWidget(scroll)
 
-    def _create_card(self, title: str, initial_val: str, color_hex: str) -> QFrame:
-        card = QFrame()
-        card.setObjectName("statusCard")
+    def update_telemetry_data(self, data: dict) -> None:
+        """
+        Update all telemetry widgets from enriched telemetry dictionary payload.
+        """
+        steering_angle = data.get("steering_angle", 0.0)
+        direction = data.get("direction", "CENTER")
+        norm_val = data.get("normalized_steering", 0.0)
+        raw_val = data.get("raw_steering", 0.0)
 
-        c_layout = QVBoxLayout(card)
-        c_layout.setContentsMargins(12, 10, 12, 10)
-        c_layout.setSpacing(4)
+        # 1. Update Steering Wheel rotation & Steering metrics
+        self.steering_wheel.set_angle(steering_angle)
+        self.steering_widget.update_metrics(
+            angle_deg=steering_angle,
+            direction=direction,
+            norm_val=norm_val,
+            raw_angle=raw_val,
+        )
 
-        lbl_t = QLabel(title)
-        lbl_t.setObjectName("telemetryLabel")
+        # 2. Update Gesture & Action
+        self.gesture_widget.update_gesture(
+            gesture_name=data.get("gesture", "None"),
+            confidence=data.get("gesture_confidence", 0.0),
+            action_name=data.get("action", "None"),
+        )
 
-        lbl_v = QLabel(initial_val)
-        lbl_v.setObjectName("telemetryValue")
-        lbl_v.setStyleSheet(f"color: {color_hex}; font-size: 18px; font-weight: bold;")
+        # 3. Update Controller output
+        self.controller_widget.update_controller(
+            status=data.get("controller_status", "Ready"),
+            stick_x=data.get("left_stick_x", 0),
+            rt_val=data.get("accelerator_rt", 0),
+            lt_val=data.get("brake_lt", 0),
+            buttons=data.get("buttons_pressed", "None"),
+        )
 
-        c_layout.addWidget(lbl_t)
-        c_layout.addWidget(lbl_v)
-        return card
+        # 4. Update Pipeline Performance Stats
+        self.stats_widget.update_stats(
+            camera_fps=data.get("camera_fps", 0.0),
+            proc_fps=data.get("processing_fps", 0.0),
+            latency_ms=data.get("latency_ms", 0.0),
+            tracking_conf=data.get("tracking_confidence", 0.0),
+        )
 
     def update_telemetry(self, steering_angle: float, gesture: str, action: str, controller: str) -> None:
-        """Update live telemetry card values."""
-        self.val_steering.setText(f"{steering_angle:+.1f}°")
-        self.val_gesture.setText(gesture or "None")
-        self.val_action.setText(action or "Idle")
-        self.val_controller.setText(controller or "Ready")
+        """Backward compatibility update helper."""
+        self.update_telemetry_data({
+            "steering_angle": steering_angle,
+            "gesture": gesture,
+            "action": action,
+            "controller_status": controller,
+        })

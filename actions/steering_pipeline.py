@@ -39,6 +39,8 @@ class SteeringDiagnostics:
     deadzone_active: bool = False
     sensitivity: float = 1.0
     curve_output: float = 0.0
+    raw_sensor_angle: float = 0.0
+    adjusted_steering_angle: float = 0.0
 
 
 class SteeringPipeline:
@@ -121,11 +123,13 @@ class SteeringPipeline:
             Filtered steering value in range [-1.0, 1.0] and complete diagnostics.
         """
         cal = self.calibration_data
+        raw_sensor_angle = float(angle_deg)
         if cal is not None and hasattr(cal, "center_angle") and hasattr(cal, "left_limit") and hasattr(cal, "right_limit"):
             center = cal.center_angle
             left_lim = cal.left_limit
             right_lim = cal.right_limit
             delta = angle_deg - center
+            adjusted_steering_angle = delta
 
             if delta < 0.0:
                 left_span = abs(center - left_lim)
@@ -140,12 +144,18 @@ class SteeringPipeline:
             else:
                 raw_norm = 0.0
         else:
+            adjusted_steering_angle = angle_deg
             max_angle = max(0.001, self.max_steering_angle)
             raw_norm = max(-1.0, min(1.0, angle_deg / max_angle))
 
-        return self.process_raw(raw_norm)
+        return self.process_raw(raw_norm, raw_sensor_angle=raw_sensor_angle, adjusted_steering_angle=adjusted_steering_angle)
 
-    def process_raw(self, raw_steering: float) -> Tuple[float, SteeringDiagnostics]:
+    def process_raw(
+        self,
+        raw_steering: float,
+        raw_sensor_angle: float = 0.0,
+        adjusted_steering_angle: float = 0.0,
+    ) -> Tuple[float, SteeringDiagnostics]:
         """
         Process normalized raw steering input in range [-1.0, 1.0] through pipeline.
 
@@ -202,6 +212,8 @@ class SteeringPipeline:
             deadzone_active=deadzone_active,
             sensitivity=self.steering_sensitivity,
             curve_output=round(curve_output, 4),
+            raw_sensor_angle=round(raw_sensor_angle, 2),
+            adjusted_steering_angle=round(adjusted_steering_angle, 2),
         )
         self._last_diagnostics = diag
         return new_filtered, diag

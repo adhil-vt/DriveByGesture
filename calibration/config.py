@@ -42,3 +42,4 @@ class CalibrationConfig:
     camera_mirrored: bool = D.CALIBRATION_CAMERA_MIRRORED
     transition_pause_duration: float = D.CALIBRATION_TRANSITION_PAUSE_DURATION
     transition_countdown_duration: float = D.CALIBRATION_TRANSITION_COUNTDOWN_DURATION
+    max_center_tolerance: float = D.CALIBRATION_MAX_CENTER_TOLERANCE

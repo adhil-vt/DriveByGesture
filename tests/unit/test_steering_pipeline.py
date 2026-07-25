@@ -140,6 +140,24 @@ class TestSteeringPipeline(unittest.TestCase):
         self.assertEqual(out_neg_over, -1.0)
         self.assertEqual(diag_neg_over.raw_steering, -1.0)
 
+    def test_center_offset_compensation_diagnostics(self):
+        """Test center offset compensation produces 0.0 adjusted angle and normalized output when holding calibrated center."""
+        from calibration.calibration_data import CalibrationData
+        pipeline = SteeringPipeline(
+            max_steering_angle=30.0,
+            steering_deadzone=0.0,
+            steering_sensitivity=1.0,
+            steering_curve_exponent=1.0,
+            steering_ema_alpha=1.0,
+            calibration_data=CalibrationData(center_angle=-0.30, left_limit=-30.30, right_limit=29.70),
+        )
+
+        # Raw angle -0.30 (natural center) -> Adjusted angle 0.0 -> Normalized output 0.0
+        out_center, diag_center = pipeline.process_angle(-0.30)
+        self.assertEqual(out_center, 0.0)
+        self.assertEqual(diag_center.raw_sensor_angle, -0.30)
+        self.assertEqual(diag_center.adjusted_steering_angle, 0.0)
+
     def test_auto_center(self):
         """Feature 6: Test smooth auto-centering decay without instant snapping."""
         pipeline = SteeringPipeline(

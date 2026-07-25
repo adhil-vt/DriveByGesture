@@ -39,6 +39,8 @@ class ActionState:
     steering_deadzone_active: bool = False
     steering_sensitivity: float = 1.0
     steering_curve_output: float = 0.0
+    raw_sensor_angle: float = 0.0
+    adjusted_steering_angle: float = 0.0
 
     def has_action(self, action_type: ActionType) -> bool:
         """Return True if an action of the given ActionType is present in active_actions."""
