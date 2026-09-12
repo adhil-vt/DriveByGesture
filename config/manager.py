@@ -28,6 +28,7 @@ from config.loader import ConfigLoader
 from config.schema import AppConfig
 from core.event_bus import EventBus
 from core.events import ConfigChangedEvent
+from core.exceptions import ConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +91,14 @@ class ConfigManager:
         Any
             The resolved config value.
         """
-        raise NotImplementedError
+        section_obj = getattr(self._config, section, None)
+        if section_obj is None:
+            return default
+        if hasattr(section_obj, key):
+            return getattr(section_obj, key)
+        if isinstance(section_obj, dict):
+            return section_obj.get(key, default)
+        return default
 
     # ── Write access ──────────────────────────────────────────────────────────
 
@@ -105,7 +113,33 @@ class ConfigManager:
         ConfigError
             If the section or key does not exist in the schema.
         """
-        raise NotImplementedError
+        section_obj = getattr(self._config, section, None)
+        if section_obj is None:
+            raise ConfigError(f"Unknown configuration section '{section}'.")
+
+        if hasattr(section_obj, key):
+            old_value = getattr(section_obj, key)
+            if old_value == value:
+                return
+            setattr(section_obj, key, value)
+        elif isinstance(section_obj, dict):
+            old_value = section_obj.get(key)
+            if old_value == value:
+                return
+            section_obj[key] = value
+        else:
+            raise ConfigError(f"Unknown configuration key '{section}.{key}'.")
+
+        self._loader.save_user_config(self._config)
+        self._bus.publish(
+            ConfigChangedEvent(
+                source=_SOURCE_ID,
+                section=section,
+                key=key,
+                old_value=old_value,
+                new_value=value,
+            )
+        )
 
     # ── Hot-reload ────────────────────────────────────────────────────────────
 
@@ -115,11 +149,11 @@ class ConfigManager:
 
         No-op if the user config path is not set or does not exist yet.
         """
-        raise NotImplementedError
+        logger.debug("ConfigManager.start_watching() is not enabled in this build.")
 
     def stop_watching(self) -> None:
         """Stop the file observer and clean up the watchdog thread."""
-        raise NotImplementedError
+        logger.debug("ConfigManager.stop_watching() called with no active observer.")
 
     def flush(self) -> None:
         """
@@ -128,4 +162,4 @@ class ConfigManager:
         Called during application shutdown to ensure any runtime changes
         survive the session.
         """
-        raise NotImplementedError
+        self._loader.save_user_config(self._config)

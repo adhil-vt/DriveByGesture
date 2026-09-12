@@ -9,6 +9,8 @@ device_index = 0
 width        = 1280
 height       = 720
 fps          = 30.0
+mirror_preview = true
+overlay_enabled = true
 
 [tracking]
 max_num_hands              = 2
@@ -24,20 +26,61 @@ steering_curve_exponent    = 3.0
 max_steering_angle         = 30.0
 steering_auto_center_rate  = 0.15
 steering_preferred_hand    = "right"
+steering_inversion         = false
 throttle_deadzone          = 0.05
 brake_z_threshold          = -0.10
 handbrake_hold_frames      = 3
 horn_hold_frames           = 2
+activation_frames          = 3
+cooldown_seconds           = 0.5
+confidence_threshold       = 0.60
+stability_timeout          = 0.5
+pinch_max_normalized_distance = 0.75
+pinch_min_confidence       = 0.45
+priority_open_palm         = 20
+priority_point             = 40
+priority_peace             = 50
+priority_fist              = 60
+priority_thumbs_up         = 80
+priority_pinch             = 90
 
 [controller]
-type            = "xbox"     # "xbox" | "null"
+emulation_type  = "xbox"
 rumble_enabled  = false
+deadzone        = 0.05
+trigger_min     = 0
+trigger_max     = 255
+stick_min       = -32768
+stick_max       = 32767
+update_frequency = 60
+
+[desktop]
+mode                 = "driving"
+cursor_sensitivity   = 1.75
+cursor_smoothing     = 0.25
+cursor_deadzone      = 0.05
+invert_x             = false
+invert_y             = false
+cursor_enabled       = true
+click_delay          = 0.2
+scroll_speed         = 1.0
+gesture_cooldown     = 0.3
+repeat_delay         = 0.5
+cursor_acceleration  = true
+workspace_w_pct      = 0.80
+workspace_h_pct      = 0.80
+show_workspace_overlay = true
+custom_shortcut      = "ctrl+tab"
 
 [active_game]
 plugin_id = "forza_horizon"
 
 [active_profile]
-name = "default"
+name = "Default"
+
+[general]
+auto_save_calibration = true
+auto_start_pipeline   = false
 
 [logging]
 level        = "INFO"
@@ -55,4 +98,3 @@ min_steering_range         = 10.0
 max_allowed_steering_range = 90.0
 calibration_file_location  = "profiles/default_calibration.json"
 required_frames_per_step   = 30
-

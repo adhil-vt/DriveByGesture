@@ -28,7 +28,7 @@ def make_mock_hand_analysis(dx: float = 0.0, dy: float = -0.20):
     hand.hand_state.landmarks = [
         Landmark(id=0, x=0.5, y=0.8, z=0.0),
     ] + [Landmark(id=i, x=0.5, y=0.5, z=0.0) for i in range(1, 9)] + [
-        Landmark(id=9, x=0.5 + dx, y=0.8 + dy, z=0.0)
+        Landmark(id=9, x=0.5 - dx, y=0.8 + dy, z=0.0)
     ] + [Landmark(id=i, x=0.5, y=0.5, z=0.0) for i in range(10, 21)]
     return hand
 

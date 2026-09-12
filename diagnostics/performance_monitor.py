@@ -72,4 +72,19 @@ class PerformanceMonitor:
 
     def _run(self) -> None:
         """Daemon thread: sample psutil at each interval."""
-        raise NotImplementedError
+        try:
+            import psutil  # noqa: PLC0415
+            process = psutil.Process()
+            while not self._stop_event.is_set():
+                try:
+                    cpu = process.cpu_percent(interval=None)
+                    mem = process.memory_info().rss
+                    self._cpu_history.append(cpu)
+                    self._mem_history.append(mem)
+                except Exception as exc:
+                    logger.warning("PerformanceMonitor sample error: %s", exc)
+                self._stop_event.wait(self._interval)
+        except ImportError:
+            logger.warning("PerformanceMonitor: psutil not installed. CPU/memory sampling disabled.")
+        except Exception as exc:
+            logger.error("PerformanceMonitor thread error: %s", exc)

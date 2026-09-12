@@ -70,16 +70,61 @@ class HealthCheck:
         Never raises — all exceptions are caught and turned into
         HealthIssue entries.
         """
-        raise NotImplementedError
+        report = HealthReport()
+        self._check_camera(report)
+        self._check_vgamepad(report)
+        self._check_mediapipe(report)
+        return report
 
     def _check_camera(self, report: HealthReport) -> None:
         """Verify that the configured camera device can be opened."""
-        raise NotImplementedError
+        try:
+            import cv2  # noqa: PLC0415
+            cap = cv2.VideoCapture(self._device_index)
+            if not cap.isOpened():
+                report.issues.append(HealthIssue(
+                    component="Camera",
+                    severity="critical",
+                    message=f"Camera device {self._device_index} could not be opened by OpenCV.",
+                ))
+            cap.release()
+        except Exception as exc:
+            report.issues.append(HealthIssue(
+                component="Camera",
+                severity="critical",
+                message=f"Camera check raised an exception: {exc}",
+            ))
 
     def _check_vgamepad(self, report: HealthReport) -> None:
         """Verify that vgamepad is importable (ViGEmBus proxy check)."""
-        raise NotImplementedError
+        try:
+            import vgamepad  # noqa: F401, PLC0415
+        except ImportError:
+            report.issues.append(HealthIssue(
+                component="Controller",
+                severity="warning",
+                message="vgamepad not installed or ViGEmBus driver missing. Virtual controller unavailable.",
+            ))
+        except Exception as exc:
+            report.issues.append(HealthIssue(
+                component="Controller",
+                severity="warning",
+                message=f"vgamepad check raised an exception: {exc}",
+            ))
 
     def _check_mediapipe(self, report: HealthReport) -> None:
         """Verify that mediapipe is importable."""
-        raise NotImplementedError
+        try:
+            import mediapipe  # noqa: F401, PLC0415
+        except ImportError:
+            report.issues.append(HealthIssue(
+                component="MediaPipe",
+                severity="critical",
+                message="mediapipe package not found. Hand tracking will not work.",
+            ))
+        except Exception as exc:
+            report.issues.append(HealthIssue(
+                component="MediaPipe",
+                severity="warning",
+                message=f"MediaPipe check raised an exception: {exc}",
+            ))

@@ -126,3 +126,41 @@ def calculate_pinch_signals(hand_state: Any) -> Optional[Dict[str, float]]:
         "tip_mcp_dist": d_tip_mcp,
         "direction_alignment": alignment,
     }
+
+
+def get_hand_scale(hand_state: Any) -> float:
+    """Calculate 3D hand scale using average palm length and width."""
+    if not hasattr(hand_state, "landmarks") or not hand_state.landmarks or len(hand_state.landmarks) < 21:
+        return 1.0
+    lms = hand_state.landmarks
+    wrist = lms[0]
+    index_mcp = lms[5]
+    middle_mcp = lms[9]
+    pinky_mcp = lms[17]
+    palm_len = distance_3d(wrist, middle_mcp)
+    palm_width = distance_3d(index_mcp, pinky_mcp)
+    return max(0.001, (palm_len + palm_width) / 2.0)
+
+
+def get_thumb_vertical_direction(hand_state: Any) -> Optional[str]:
+    """
+    Determine if thumb points UP or DOWN relative to wrist/MCP in camera coordinates.
+    In MediaPipe coordinates, Y axis increases downwards.
+    Returns "UP", "DOWN", or "NEUTRAL".
+    """
+    if not hasattr(hand_state, "landmarks") or not hand_state.landmarks or len(hand_state.landmarks) < 21:
+        return None
+    lms = hand_state.landmarks
+    mcp = lms[2]
+    tip = lms[4]
+
+    scale = get_hand_scale(hand_state)
+    norm_dy = (tip.y - mcp.y) / scale
+
+    if norm_dy < -0.12:
+        return "UP"
+    elif norm_dy > 0.08:
+        return "DOWN"
+    else:
+        return "NEUTRAL"
+

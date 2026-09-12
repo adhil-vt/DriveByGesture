@@ -27,11 +27,15 @@ from gui.settings_pages import (
     CalibrationPage,
     CameraPage,
     ControllerPage,
+    DesktopPage,
     GeneralPage,
     ProfilePage,
     SteeringPage,
 )
 from gui.styles import DARK_THEME_QSS
+
+from core.resources import apply_app_icon
+from core.version import get_window_title
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +53,8 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self.manager = calibration_manager
 
-        self.setWindowTitle("DriveByGesture — Settings & Configuration")
+        self.setWindowTitle(get_window_title("Settings"))
+        apply_app_icon(self)
         self.resize(900, 650)
         self.setMinimumSize(850, 600)
         self.setModal(True)
@@ -76,12 +81,13 @@ class SettingsDialog(QDialog):
 
         nav_items = [
             ("⚙   General", 0),
-            ("📷   Camera", 1),
-            ("☸   Steering", 2),
-            ("🎮   Controller", 3),
-            ("🎯   Calibration", 4),
-            ("👤   Profiles", 5),
-            ("ℹ️   About", 6),
+            ("🖥️   Desktop Controls", 1),
+            ("📷   Camera", 2),
+            ("☸   Steering", 3),
+            ("🎮   Controller", 4),
+            ("🎯   Calibration", 5),
+            ("👤   Profiles", 6),
+            ("ℹ️   About", 7),
         ]
 
         for title, index in nav_items:
@@ -95,6 +101,7 @@ class SettingsDialog(QDialog):
         self.pages_stack = QStackedWidget()
 
         self.page_general = GeneralPage()
+        self.page_desktop = DesktopPage()
         self.page_camera = CameraPage()
         self.page_steering = SteeringPage()
         self.page_controller = ControllerPage()
@@ -103,6 +110,7 @@ class SettingsDialog(QDialog):
         self.page_about = AboutPage()
 
         self.pages_stack.addWidget(self.page_general)
+        self.pages_stack.addWidget(self.page_desktop)
         self.pages_stack.addWidget(self.page_camera)
         self.pages_stack.addWidget(self.page_steering)
         self.pages_stack.addWidget(self.page_controller)
@@ -149,10 +157,13 @@ class SettingsDialog(QDialog):
         self.page_controller.reconnect_requested.connect(self.reconnect_controller_requested.emit)
 
     def _on_apply(self) -> None:
-        """Apply current settings to running application live."""
+        """Apply current settings to running application live and save to disk."""
         try:
             cam_cfg = self.page_camera.get_config()
             steer_cfg = self.page_steering.get_config()
+            desk_cfg = self.page_desktop.get_config()
+            ctrl_cfg = self.page_controller.get_config() if hasattr(self.page_controller, "get_config") else None
+            gen_cfg = self.page_general.get_config() if hasattr(self.page_general, "get_config") else None
 
             # Apply UI preview display preferences directly to camera widget if parent is MainWindow
             if self.parent() and hasattr(self.parent(), "camera_widget"):
@@ -160,8 +171,57 @@ class SettingsDialog(QDialog):
                 cw.mirror_preview = self.page_camera.is_mirror_preview_enabled()
                 cw.overlay_enabled = self.page_camera.is_show_overlay_enabled()
 
+            if self.parent() and hasattr(self.parent(), "mode_manager"):
+                mm = getattr(self.parent(), "mode_manager")
+                target_mode = desk_cfg.get("mode", "driving")
+                mm.set_mode(target_mode)
+
+            if self.parent() and hasattr(self.parent(), "worker") and self.parent().worker:
+                worker = self.parent().worker
+                if hasattr(worker, "desktop_controller") and worker.desktop_controller:
+                    worker.desktop_controller.apply_config(desk_cfg)
+                if hasattr(worker, "apply_live_config"):
+                    worker.apply_live_config(cam_cfg, steer_cfg)
+                if ctrl_cfg and hasattr(worker, "apply_controller_config"):
+                    worker.apply_controller_config(ctrl_cfg)
+
+            # Persist settings to Active Profile and save to disk
+            if self.parent() and hasattr(self.parent(), "profile_manager"):
+                pm = getattr(self.parent(), "profile_manager")
+                active_p = getattr(pm, "active_profile", None) or getattr(pm, "active", None)
+                if active_p:
+                    if hasattr(active_p, "apply_desktop_config"):
+                        active_p.apply_desktop_config(desk_cfg)
+                    elif hasattr(active_p, "desktop") and isinstance(active_p.desktop, dict):
+                        active_p.desktop.update(desk_cfg)
+
+                    if hasattr(active_p, "apply_camera_config"):
+                        active_p.apply_camera_config(cam_cfg)
+                    elif hasattr(cam_cfg, "to_dict") and hasattr(active_p, "camera") and isinstance(active_p.camera, dict):
+                        active_p.camera.update(cam_cfg.to_dict())
+
+                    if hasattr(active_p, "apply_gesture_config"):
+                        active_p.apply_gesture_config(steer_cfg)
+                    elif hasattr(steer_cfg, "to_dict") and hasattr(active_p, "steering") and isinstance(active_p.steering, dict):
+                        active_p.steering.update(steer_cfg.to_dict())
+
+                    if ctrl_cfg:
+                        if hasattr(active_p, "apply_controller_config"):
+                            active_p.apply_controller_config(ctrl_cfg)
+                        elif hasattr(ctrl_cfg, "to_dict") and hasattr(active_p, "controller") and isinstance(active_p.controller, dict):
+                            active_p.controller.update(ctrl_cfg.to_dict())
+
+                    if gen_cfg:
+                        if hasattr(active_p, "apply_general_config"):
+                            active_p.apply_general_config(gen_cfg)
+                        elif hasattr(gen_cfg, "to_dict") and hasattr(active_p, "general") and isinstance(active_p.general, dict):
+                            active_p.general.update(gen_cfg.to_dict())
+
+                    pm.save_active()
+                    logger.info("Active profile '%s' updated and saved to disk.", active_p.name)
+
             self.config_applied.emit(cam_cfg, steer_cfg)
-            logger.info("Settings applied live.")
+            logger.info("Settings applied live and saved to disk.")
         except Exception as exc:
             logger.error("Failed to apply settings: %s", exc)
             QMessageBox.critical(self, "Settings Error", f"Failed to apply settings: {exc}")
@@ -171,14 +231,41 @@ class SettingsDialog(QDialog):
         self._on_apply()
         self.accept()
 
+    def update_telemetry(self, telemetry: dict) -> None:
+        """Forward live telemetry to Desktop Controls page for real-time monitoring and table highlighting."""
+        if hasattr(self, "page_desktop") and hasattr(self.page_desktop, "update_telemetry"):
+            self.page_desktop.update_telemetry(telemetry)
+
     def _on_reset_defaults(self) -> None:
-        """Reset page inputs to default configuration."""
-        self.page_steering.dsp_sensitivity.setValue(1.0)
-        self.page_steering.dsp_deadzone.setValue(0.05)
-        self.page_steering.sb_max_angle.setValue(30)
-        self.page_steering.dsp_smoothing.setValue(0.3)
-        self.page_steering.cb_invert.setChecked(False)
-        QMessageBox.information(self, "Reset Defaults", "Steering and Camera settings reset to defaults. Click Apply to save.")
+        """Reset all page inputs to default configuration across every settings section."""
+        reply = QMessageBox.question(
+            self,
+            "Reset All Settings to Defaults",
+            "Are you sure you want to reset ALL settings (Camera, Steering, Controller, Desktop Controls, General) to factory defaults?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if reply != QMessageBox.Yes:
+            return
+
+        if hasattr(self.page_camera, "reset_to_defaults"):
+            self.page_camera.reset_to_defaults()
+        if hasattr(self.page_steering, "reset_to_defaults"):
+            self.page_steering.reset_to_defaults()
+        if hasattr(self.page_controller, "reset_to_defaults"):
+            self.page_controller.reset_to_defaults()
+        if hasattr(self.page_desktop, "reset_desktop_controls"):
+            self.page_desktop.reset_desktop_controls()
+        if hasattr(self.page_general, "reset_to_defaults"):
+            self.page_general.reset_to_defaults()
+
+        self._on_apply()
+
+        QMessageBox.information(
+            self,
+            "Reset Defaults",
+            "All settings have been reset to factory defaults and applied to the active profile.",
+        )
 
     def _on_open_wizard(self) -> None:
         self.open_wizard_requested.emit()

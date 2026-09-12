@@ -71,6 +71,7 @@ class FistGesture(Gesture):
                     confidence=0.0,
                     timestamp=timestamp,
                     handedness=handedness,
+                    rejection_reason=f"{f.name.name.title()} finger extended",
                 )
 
         # 2. Check Thumb tolerance: CURLED, PARTIALLY_BENT, or UNKNOWN
@@ -86,6 +87,7 @@ class FistGesture(Gesture):
                 confidence=0.0,
                 timestamp=timestamp,
                 handedness=handedness,
+                rejection_reason="Thumb is extended",
             )
 
         # 3. Non-thumb fingers (Index, Middle, Ring, Pinky)
@@ -105,6 +107,7 @@ class FistGesture(Gesture):
                     confidence=0.0,
                     timestamp=timestamp,
                     handedness=handedness,
+                    rejection_reason=f"{f.name.name.title()} position unknown",
                 )
 
         curled_count = sum(1 for f in non_thumb_fingers if f.position == FingerPosition.CURLED)
@@ -118,6 +121,7 @@ class FistGesture(Gesture):
                 confidence=0.0,
                 timestamp=timestamp,
                 handedness=handedness,
+                rejection_reason="Fingers not fully folded",
             )
 
         # Calculate confidence
@@ -148,7 +152,7 @@ class FistGesture(Gesture):
             if f.position == FingerPosition.CURLED:
                 non_thumb_scores.append(1.0)
             elif f.position == FingerPosition.PARTIALLY_BENT:
-                non_thumb_scores.append(0.65)
+                non_thumb_scores.append(0.80)
             else:
                 non_thumb_scores.append(0.0)
 
@@ -161,13 +165,12 @@ class FistGesture(Gesture):
         elif thumb_pos == FingerPosition.PARTIALLY_BENT:
             thumb_factor = 0.85
         else:  # UNKNOWN
-            thumb_factor = 0.70
+            thumb_factor = 0.75
 
         curl_factor = 0.80 * non_thumb_factor + 0.20 * thumb_factor
 
-        # 3. Quality & Stability factor across all 5 fingers
-        all_fingers = [hand_analysis.thumb] + non_thumb_fingers
-        quality_stability = calculate_quality_and_stability(all_fingers)
+        # 3. Quality & Stability factor focused on primary non-thumb fingers
+        quality_stability = calculate_quality_and_stability(non_thumb_fingers)
 
         final_score = curl_factor * quality_stability
         return round(max(0.0, min(1.0, final_score)), 2)

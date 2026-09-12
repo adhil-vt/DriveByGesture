@@ -71,6 +71,7 @@ class OpenPalmGesture(Gesture):
                     confidence=0.0,
                     timestamp=timestamp,
                     handedness=handedness,
+                    rejection_reason=f"{f.name.name.title()} finger curled",
                 )
 
         # Non-thumb fingers (Index, Middle, Ring, Pinky)
@@ -88,13 +89,24 @@ class OpenPalmGesture(Gesture):
         thumb_valid = hand_analysis.thumb.position in (FingerPosition.EXTENDED, FingerPosition.PARTIALLY_BENT)
 
         # Open palm requires thumb to be valid and at least 3 non-thumb fingers fully EXTENDED with at most 1 PARTIALLY_BENT
-        if not (thumb_valid and extended_count >= 3 and partially_bent_count <= 1):
+        if not thumb_valid:
             return GestureResult(
                 gesture_name=self.name,
                 detected=False,
                 confidence=0.0,
                 timestamp=timestamp,
                 handedness=handedness,
+                rejection_reason="Thumb not extended",
+            )
+
+        if not (extended_count >= 3 and partially_bent_count <= 1):
+            return GestureResult(
+                gesture_name=self.name,
+                detected=False,
+                confidence=0.0,
+                timestamp=timestamp,
+                handedness=handedness,
+                rejection_reason="Fingers not fully extended",
             )
 
         # Compute confidence score
@@ -134,7 +146,7 @@ class OpenPalmGesture(Gesture):
                 if f.position == FingerPosition.EXTENDED:
                     ext_scores.append(1.0)
                 elif f.position == FingerPosition.PARTIALLY_BENT:
-                    ext_scores.append(0.70)
+                    ext_scores.append(0.82)
                 else:
                     ext_scores.append(0.0)
 

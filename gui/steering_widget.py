@@ -95,11 +95,13 @@ class SteeringWidget(QFrame):
         lbl_a_title = QLabel("Angle:")
         lbl_a_title.setStyleSheet("color: #8f96a3; font-size: 11px; font-weight: 600;")
         self.val_angle = QLabel("0.0°")
+        self.val_angle.setMinimumWidth(60)
         self.val_angle.setStyleSheet("color: #00e5ff; font-weight: 700; font-size: 15px;")
 
         lbl_d_title = QLabel("Direction:")
         lbl_d_title.setStyleSheet("color: #8f96a3; font-size: 11px; font-weight: 600;")
         self.val_direction = QLabel("CENTER")
+        self.val_direction.setMinimumWidth(70)
         self.val_direction.setStyleSheet("color: #ffffff; font-weight: 700; font-size: 15px;")
 
         grid.addWidget(lbl_a_title, 0, 0)
@@ -111,11 +113,13 @@ class SteeringWidget(QFrame):
         lbl_n_title = QLabel("Normalized:")
         lbl_n_title.setStyleSheet("color: #8f96a3; font-size: 11px; font-weight: 600;")
         self.val_norm = QLabel("0.00")
+        self.val_norm.setMinimumWidth(60)
         self.val_norm.setStyleSheet("color: #00e676; font-weight: 700; font-size: 15px;")
 
         lbl_r_title = QLabel("Raw Value:")
         lbl_r_title.setStyleSheet("color: #8f96a3; font-size: 11px; font-weight: 600;")
         self.val_raw = QLabel("0.0°")
+        self.val_raw.setMinimumWidth(70)
         self.val_raw.setStyleSheet("color: #8f96a3; font-weight: 700; font-size: 15px;")
 
         grid.addWidget(lbl_n_title, 1, 0)

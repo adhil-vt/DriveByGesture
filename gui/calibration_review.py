@@ -126,8 +126,10 @@ class ReviewWidget(QFrame):
         self.val_center.setText(f"{data.center_angle:+.1f}°")
         self.val_left.setText(f"{data.left_limit:+.1f}°")
         self.val_right.setText(f"{data.right_limit:+.1f}°")
-        self.val_range.setText(f"{data.steering_range:.1f}°")
-        self.val_thresh.setText(f"{data.minimum_threshold:.1f}°")
+        s_range = getattr(data, "total_range", getattr(data, "steering_range", 0.0))
+        self.val_range.setText(f"{s_range:.1f}°")
+        m_thresh = getattr(data, "minimum_threshold", 8.0)
+        self.val_thresh.setText(f"{m_thresh:.1f}°")
 
     def update_test_steering(self, norm_val: float) -> None:
         """Update live normalized steering response preview bar."""

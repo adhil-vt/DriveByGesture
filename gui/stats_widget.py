@@ -35,11 +35,13 @@ class PipelineStatsWidget(QFrame):
         lbl_cam_fps = QLabel("Camera FPS:")
         lbl_cam_fps.setStyleSheet("color: #8f96a3; font-size: 11px; font-weight: 600;")
         self.val_cam_fps = QLabel("0.0")
+        self.val_cam_fps.setMinimumWidth(50)
         self.val_cam_fps.setStyleSheet("color: #00e676; font-weight: 700; font-size: 14px;")
 
         lbl_proc_fps = QLabel("Proc FPS:")
         lbl_proc_fps.setStyleSheet("color: #8f96a3; font-size: 11px; font-weight: 600;")
         self.val_proc_fps = QLabel("0.0")
+        self.val_proc_fps.setMinimumWidth(50)
         self.val_proc_fps.setStyleSheet("color: #00e5ff; font-weight: 700; font-size: 14px;")
 
         grid.addWidget(lbl_cam_fps, 0, 0)
@@ -51,11 +53,13 @@ class PipelineStatsWidget(QFrame):
         lbl_lat = QLabel("Frame Latency:")
         lbl_lat.setStyleSheet("color: #8f96a3; font-size: 11px; font-weight: 600;")
         self.val_latency = QLabel("0.0 ms")
+        self.val_latency.setMinimumWidth(55)
         self.val_latency.setStyleSheet("color: #ffb300; font-weight: 700; font-size: 14px;")
 
         lbl_trk_conf = QLabel("Track Conf:")
         lbl_trk_conf.setStyleSheet("color: #8f96a3; font-size: 11px; font-weight: 600;")
         self.val_trk_conf = QLabel("N/A")
+        self.val_trk_conf.setMinimumWidth(50)
         self.val_trk_conf.setStyleSheet("color: #ffffff; font-weight: 700; font-size: 14px;")
 
         grid.addWidget(lbl_lat, 1, 0)

@@ -40,6 +40,7 @@ class ActionEngine:
             steering_curve_exponent=getattr(self.config, "steering_curve_exponent", 1.0),
             steering_ema_alpha=getattr(self.config, "steering_ema_alpha", 1.0),
             steering_auto_center_rate=getattr(self.config, "steering_auto_center_rate", 0.15),
+            steering_inversion=getattr(self.config, "steering_inversion", False),
         )
 
     def process(
@@ -143,6 +144,7 @@ class ActionEngine:
         middle_mcp = lms[9]
 
         # Physical user coordinate system (Physical LEFT -> negative angle/steering, Physical RIGHT -> positive angle/steering)
+        # In raw camera frame facing user: User LEFT -> camera right (middle_mcp.x > wrist.x), User RIGHT -> camera left (middle_mcp.x < wrist.x)
         dx = wrist.x - middle_mcp.x
         dy = middle_mcp.y - wrist.y
 

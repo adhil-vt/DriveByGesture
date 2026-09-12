@@ -221,6 +221,7 @@ class OpenCVCameraSource(ICameraSource):
             cap.set(cv2.CAP_PROP_FRAME_WIDTH, self._target_width)
             cap.set(cv2.CAP_PROP_FRAME_HEIGHT, self._target_height)
             cap.set(cv2.CAP_PROP_FPS, self._target_fps)
+            cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
 
             # Read back the values the driver actually accepted.
             self._actual_width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
@@ -277,12 +278,14 @@ class OpenCVCameraSource(ICameraSource):
             )
 
         self._seq_id += 1
+        now_mono = time.monotonic()
         return Frame(
             image=image,
             timestamp=time.time(),
             seq_id=self._seq_id,
             width=self._actual_width,
             height=self._actual_height,
+            capture_timestamp=now_mono,
         )
 
     def release(self) -> None:

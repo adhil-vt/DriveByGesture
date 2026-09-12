@@ -11,6 +11,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QFrame, QLabel, QScrollArea, QVBoxLayout, QWidget
 
 from gui.controller_widget import ControllerWidget
+from gui.game_status_widget import GameStatusWidget
 from gui.gesture_widget import GestureWidget
 from gui.stats_widget import PipelineStatsWidget
 from gui.steering_wheel import SteeringWheelWidget
@@ -26,8 +27,7 @@ class TelemetryPanel(QFrame):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("telemetryCard")
-        self.setMinimumWidth(380)
-        self.setMaximumWidth(440)
+        self.setFixedWidth(410)
 
         main_layout = QVBoxLayout(self)
         main_layout.setContentsMargins(14, 14, 14, 14)
@@ -47,6 +47,10 @@ class TelemetryPanel(QFrame):
         layout = QVBoxLayout(container)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
+
+        # 0. Game Status Card (first, most prominent)
+        self.game_status = GameStatusWidget()
+        layout.addWidget(self.game_status)
 
         # 1. Vector Steering Wheel Widget (Centered, 240x240)
         wheel_box = QFrame()
@@ -79,6 +83,16 @@ class TelemetryPanel(QFrame):
         scroll.setWidget(container)
         main_layout.addWidget(scroll)
 
+    def update_game_status(self, game_name: str) -> None:
+        """
+        Update the game status card.
+        Pass empty string or None to show idle state.
+        """
+        if game_name:
+            self.game_status.set_game(game_name)
+        else:
+            self.game_status.set_idle()
+
     def update_telemetry_data(self, data: dict) -> None:
         """
         Update all telemetry widgets from enriched telemetry dictionary payload.
@@ -98,10 +112,12 @@ class TelemetryPanel(QFrame):
         )
 
         # 2. Update Gesture & Action
+        mode = data.get("mode", "driving")
+        action_name = data.get("desktop_action", "None") if mode == "desktop" else data.get("action", "None")
         self.gesture_widget.update_gesture(
             gesture_name=data.get("gesture", "None"),
             confidence=data.get("gesture_confidence", 0.0),
-            action_name=data.get("action", "None"),
+            action_name=action_name,
         )
 
         # 3. Update Controller output

@@ -71,6 +71,7 @@ class SteeringPipeline:
         steering_curve_exponent: float = 3.0,
         steering_ema_alpha: float = 0.15,
         steering_auto_center_rate: Optional[float] = None,
+        steering_inversion: bool = False,
         calibration_data: Optional[Any] = None,
     ) -> None:
         self.max_steering_angle = max_steering_angle
@@ -83,6 +84,7 @@ class SteeringPipeline:
             if steering_auto_center_rate is not None
             else steering_ema_alpha
         )
+        self.steering_inversion = steering_inversion
         self.calibration_data = calibration_data
 
         self._filtered_steering: float = 0.0
@@ -147,6 +149,9 @@ class SteeringPipeline:
             adjusted_steering_angle = angle_deg
             max_angle = max(0.001, self.max_steering_angle)
             raw_norm = max(-1.0, min(1.0, angle_deg / max_angle))
+
+        if self.steering_inversion:
+            raw_norm = -raw_norm
 
         return self.process_raw(raw_norm, raw_sensor_angle=raw_sensor_angle, adjusted_steering_angle=adjusted_steering_angle)
 

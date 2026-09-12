@@ -18,11 +18,14 @@ env/
 .coverage
 htmlcov/
 
-# Logs
+# Logs & Diagnostics
 *.log
+crash_reports/
 
-# Calibration profiles
-profiles/*.json
+# Build & Distribution artifacts
+build/
+dist/
+*.egg-info/
 
 # OS files
 .DS_Store

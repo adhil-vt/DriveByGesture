@@ -1,7 +1,8 @@
 """
 gesturedrive.tracking.hand_tracker
 ====================================
-IHandTracker abstraction and its MediaPipe 0.10+ HandLandmarker implementation.
+IHandTracker abstraction and its MediaPipe 0.10+ HandLandmarker implementation
+with integrated TemporalHandTracker for per-hand state isolation.
 
 Classes
 -------
@@ -9,21 +10,8 @@ TrackingResult
     Full output of ``process_frame()``: annotated image + List[HandState].
 MediaPipeHandTracker
     Production IHandTracker backed by ``mediapipe.tasks.vision.HandLandmarker``
-    (MediaPipe 0.10+ Tasks API).
-    Wraps the entire MediaPipe API surface; no other module imports mediapipe.
-
-Model file
-----------
-MediaPipe 0.10+ requires an external ``hand_landmarker.task`` model bundle.
-The tracker downloads it automatically on ``initialise()`` if it is not already
-present in ``model_dir`` (default: ``models/`` relative to the project root).
-The official download URL is defined in ``_MODEL_URL`` and the expected
-filename in ``_MODEL_FILENAME``.
-
-Configuration
--------------
-All knobs (max_hands, min_detection_confidence, min_tracking_confidence)
-are sourced from the injected ``TrackingConfig``.  No magic numbers here.
+    (MediaPipe 0.10+ Tasks API) with per-hand isolated handedness stabilization,
+    per-hand landmark filtering, and persistent temporal hand association.
 """
 
 from __future__ import annotations
@@ -43,6 +31,7 @@ from core.interfaces import IHandTracker
 from core.models import Frame, Handedness
 from tracking.hand_state import HandState
 from tracking.landmark_normalizer import LandmarkNormalizer
+from tracking.temporal_tracker import RawHandCandidate, TemporalHandTracker
 
 logger = logging.getLogger(__name__)
 
@@ -72,14 +61,17 @@ class TrackingResult:
         The unmodified ``Frame`` received from the camera.
     annotated_image:
         A copy of the raw BGR image with landmarks, connections, IDs, and
-        handedness labels drawn on it.  Shape: (H, W, 3), dtype uint8.
+        handedness labels drawn on it. Shape: (H, W, 3), dtype uint8.
     hands:
-        Ordered list of ``HandState`` per detected hand.  Empty when
+        Ordered list of ``HandState`` per detected hand. Empty when
         no hands are visible.
+    inference_time_ms:
+        MediaPipe model inference time in milliseconds.
     """
     original_frame: Frame
     annotated_image: object                   # numpy.ndarray at runtime
     hands: List[HandState] = field(default_factory=list)
+    inference_time_ms: float = 0.0
 
     @property
     def hand_count(self) -> int:
@@ -128,10 +120,8 @@ _HAND_CONNECTIONS: Tuple[Tuple[int, int], ...] = (
 
 class MediaPipeHandTracker(IHandTracker):
     """
-    IHandTracker implementation using MediaPipe 0.10+ HandLandmarker Tasks API.
-
-    This class isolates the entire MediaPipe import surface. No other module
-    in GestureDrive imports mediapipe.
+    IHandTracker implementation using MediaPipe 0.10+ HandLandmarker Tasks API,
+    with TemporalHandTracker for per-hand state isolation and persistent identity.
     """
 
     def __init__(
@@ -139,12 +129,16 @@ class MediaPipeHandTracker(IHandTracker):
         max_num_hands: int = 2,
         min_detection_confidence: float = 0.7,
         min_tracking_confidence: float = 0.5,
+        min_presence_confidence: float = 0.5,
         model_complexity: int = 1,
         model_path: Optional[Path] = None,
+        max_lost_time: float = 0.30,
+        max_missed_frames: int = 8,
     ) -> None:
         self._max_num_hands = max_num_hands
         self._min_detection_confidence = min_detection_confidence
         self._min_tracking_confidence = min_tracking_confidence
+        self._min_presence_confidence = min_presence_confidence
         self._model_complexity = model_complexity
         self._model_path: Path = (
             model_path if model_path is not None
@@ -153,6 +147,10 @@ class MediaPipeHandTracker(IHandTracker):
 
         self._landmarker = None        # mediapipe HandLandmarker — set in initialise()
         self._normalizer = LandmarkNormalizer()
+        self._temporal_tracker = TemporalHandTracker(
+            max_lost_time=max_lost_time,
+            max_missed_frames=max_missed_frames,
+        )
         self._is_initialised: bool = False
         self._frame_timestamp_ms: int = 0   # monotonically increasing; required by VIDEO mode
 
@@ -165,7 +163,7 @@ class MediaPipeHandTracker(IHandTracker):
         if self._is_initialised:
             logger.warning(
                 "MediaPipeHandTracker.initialise() called on an already-"
-                "initialised tracker.  Call shutdown() first to re-initialise."
+                "initialised tracker. Call shutdown() first to re-initialise."
             )
             return
 
@@ -194,7 +192,7 @@ class MediaPipeHandTracker(IHandTracker):
                 running_mode=VisionRunningMode.VIDEO,
                 num_hands=self._max_num_hands,
                 min_hand_detection_confidence=self._min_detection_confidence,
-                min_hand_presence_confidence=self._min_detection_confidence,
+                min_hand_presence_confidence=self._min_presence_confidence,
                 min_tracking_confidence=self._min_tracking_confidence,
             )
 
@@ -211,6 +209,7 @@ class MediaPipeHandTracker(IHandTracker):
 
         self._is_initialised = True
         self._frame_timestamp_ms = 0
+        self._temporal_tracker.reset()
         logger.info(
             "MediaPipe HandLandmarker initialised (max_hands=%d, model=%s).",
             self._max_num_hands,
@@ -232,6 +231,7 @@ class MediaPipeHandTracker(IHandTracker):
                 self._landmarker = None
                 self._is_initialised = False
                 self._frame_timestamp_ms = 0
+                self._temporal_tracker.reset()
 
         logger.info("MediaPipe HandLandmarker shut down.")
 
@@ -240,9 +240,6 @@ class MediaPipeHandTracker(IHandTracker):
     def process(self, frame: Frame) -> List[HandState]:
         """
         Run HandLandmarker inference on ``frame`` and return a List[HandState].
-
-        This is the ``IHandTracker`` contract method consumed by
-        ``TrackingService`` in the full production pipeline.
         """
         return self.process_frame(frame).hands
 
@@ -264,9 +261,19 @@ class MediaPipeHandTracker(IHandTracker):
         # Wrap in a MediaPipe Image (SRGB = 3-channel uint8 RGB).
         mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-        self._frame_timestamp_ms += 33
-        timestamp_ms = self._frame_timestamp_ms
+        # Calculate real monotonic timestamp in milliseconds
+        if getattr(frame, "timestamp", 0.0) > 0.0:
+            calc_ms = int(frame.timestamp * 1000)
+        else:
+            calc_ms = int(time.monotonic_ns() // 1_000_000)
 
+        if calc_ms <= self._frame_timestamp_ms:
+            calc_ms = self._frame_timestamp_ms + 1
+        self._frame_timestamp_ms = calc_ms
+        timestamp_ms = self._frame_timestamp_ms
+        cur_ts_sec = frame.timestamp if getattr(frame, "timestamp", 0.0) > 0.0 else (timestamp_ms / 1000.0)
+
+        t_infer0 = time.perf_counter()
         try:
             mp_result = self._landmarker.detect_for_video(mp_image, timestamp_ms)
         except Exception as exc:
@@ -274,10 +281,13 @@ class MediaPipeHandTracker(IHandTracker):
                 f"HandLandmarker.detect_for_video() failed on "
                 f"frame {frame.seq_id}: {exc}"
             ) from exc
+        t_infer1 = time.perf_counter()
+        inference_time_ms = (t_infer1 - t_infer0) * 1000.0
 
         annotated = raw_image.copy()  # type: ignore[attr-defined]
 
-        detected_hand_states: List[HandState] = []
+        # Build candidate detections from MediaPipe
+        candidates: List[RawHandCandidate] = []
 
         has_landmarks = (
             mp_result.hand_landmarks
@@ -290,34 +300,45 @@ class MediaPipeHandTracker(IHandTracker):
                 mp_result.hand_landmarks, mp_result.handedness
             ):
                 cat = cat_list[0]
-                handedness = self._parse_handedness_category(cat)
-                confidence = cat.score if cat.score is not None else 0.0
+                raw_handedness = self._parse_handedness_category(cat)
+                raw_confidence = cat.score if cat.score is not None else 0.0
 
                 try:
-                    hand_state = self._normalizer.normalize(
+                    raw_hand_state = self._normalizer.normalize(
                         raw_landmarks=lm_list,
-                        handedness=handedness,
-                        confidence=confidence,
-                        timestamp=frame.timestamp,
+                        handedness=raw_handedness,
+                        confidence=raw_confidence,
+                        timestamp=cur_ts_sec,
                     )
                 except ValueError as exc:
                     logger.warning(
-                        "Landmark normalization failed (frame %d): %s "
-                        "— skipping hand.",
+                        "Landmark normalization failed (frame %d): %s — skipping candidate.",
                         frame.seq_id, exc,
                     )
                     continue
 
-                detected_hand_states.append(hand_state)
-
-                self._draw_hand(
-                    image=annotated,
-                    hand_state=hand_state,
-                    frame_width=frame.width,
-                    frame_height=frame.height,
+                candidates.append(
+                    RawHandCandidate(
+                        raw_landmarks=raw_hand_state.landmarks,
+                        raw_handedness=raw_handedness,
+                        raw_confidence=raw_confidence,
+                        bounding_box=raw_hand_state.bounding_box,
+                        palm_center=raw_hand_state.palm_center,
+                        hand_center=raw_hand_state.hand_center,
+                    )
                 )
-        else:
-            logger.debug("No hands detected in frame %d.", frame.seq_id)
+
+        # Process through temporal tracker for association and isolated state updates
+        detected_hand_states = self._temporal_tracker.update(candidates, cur_ts_sec)
+
+        # Draw annotations
+        for hand_state in detected_hand_states:
+            self._draw_hand(
+                image=annotated,
+                hand_state=hand_state,
+                frame_width=frame.width,
+                frame_height=frame.height,
+            )
 
         if detected_hand_states:
             logger.debug(
@@ -325,7 +346,7 @@ class MediaPipeHandTracker(IHandTracker):
                 frame.seq_id,
                 len(detected_hand_states),
                 ", ".join(
-                    f"{hs.handedness.name}({hs.confidence:.2f})"
+                    f"ID:{hs.hand_id} {hs.handedness.name}({hs.confidence:.2f})"
                     for hs in detected_hand_states
                 ),
             )
@@ -334,6 +355,7 @@ class MediaPipeHandTracker(IHandTracker):
             original_frame=frame,
             annotated_image=annotated,
             hands=detected_hand_states,
+            inference_time_ms=inference_time_ms,
         )
 
     # ── Properties ────────────────────────────────────────────────────────────
@@ -343,7 +365,7 @@ class MediaPipeHandTracker(IHandTracker):
         """Return True if ``initialise()`` has been called successfully."""
         return self._is_initialised
 
-    # ── Annotation ────────────────────────────────────────────────────────────
+    # ── Annotation ────────────────────────────────────────────────────
 
     def _draw_hand(
         self,
@@ -393,9 +415,9 @@ class MediaPipeHandTracker(IHandTracker):
                 _FONT, _ID_SCALE, _COLOR_LM_ID, _ID_THICK, cv2.LINE_AA,
             )
 
-        # 4. Handedness label near wrist.
+        # 4. Handedness and ID label near wrist.
         wrist_x, wrist_y = px_coords[0]
-        label = f"{hand_state.handedness.name}  {hand_state.confidence:.0%}"
+        label = f"[{hand_state.hand_id}] {hand_state.handedness.name} {hand_state.confidence:.0%}"
         label_fg = _COLOR_LABEL_LEFT if hand_state.handedness == Handedness.LEFT else _COLOR_LABEL_RIGHT
 
         (tw, th), _ = cv2.getTextSize(label, _FONT, _LABEL_SCALE, _LABEL_THICK)

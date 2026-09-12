@@ -21,11 +21,18 @@ def make_hand_analysis(
     confidence=0.9,
     handedness=Handedness.RIGHT,
     timestamp=100.0,
+    thumb_vertical="UP",
 ):
     analysis = MagicMock(spec=HandAnalysis)
     analysis.timestamp = timestamp
     analysis.hand_state = MagicMock()
     analysis.hand_state.handedness = handedness
+
+    # Mock 21 landmarks
+    lms = [MagicMock(x=0.5, y=0.5, z=0.0) for _ in range(21)]
+    lms[2].y = 0.5
+    lms[4].y = 0.1 if thumb_vertical == "UP" else (0.9 if thumb_vertical == "DOWN" else 0.5)
+    analysis.hand_state.landmarks = lms
 
     analysis.thumb = FingerState(name=FingerName.THUMB, position=thumb_pos, confidence=confidence)
     analysis.index = FingerState(name=FingerName.INDEX, position=index_pos, confidence=confidence)

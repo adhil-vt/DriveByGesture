@@ -32,6 +32,7 @@ class ActionEngineConfig:
     steering_curve_exponent: float = 1.0
     steering_ema_alpha: float = 1.0
     steering_auto_center_rate: float = 0.15
+    steering_inversion: bool = False
     gesture_mappings: Dict[str, ActionType] = field(
         default_factory=lambda: {
             "OPEN PALM": ActionType.ACCELERATOR,

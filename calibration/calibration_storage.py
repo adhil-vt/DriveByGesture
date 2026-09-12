@@ -11,11 +11,14 @@ import logging
 from pathlib import Path
 from typing import Optional, Union
 
+from core.resources import get_default_calibration_path, get_user_profiles_dir
 from calibration.calibration_data import CalibrationData
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_CALIBRATION_PATH = Path("profiles/default_calibration.json")
+
+def _get_default_calibration_path() -> Path:
+    return get_default_calibration_path()
 
 
 class CalibrationStorage:
@@ -26,10 +29,17 @@ class CalibrationStorage:
     ----------
     default_filepath: Optional[Union[str, Path]]
         Default path used if no specific path is passed to save/load.
+        Defaults to %LOCALAPPDATA%\\DriveByGesture\\profiles\\default_calibration.json.
     """
 
     def __init__(self, default_filepath: Optional[Union[str, Path]] = None) -> None:
-        self.default_filepath = Path(default_filepath) if default_filepath else DEFAULT_CALIBRATION_PATH
+        if default_filepath:
+            p = Path(default_filepath)
+            if not p.is_absolute():
+                p = get_user_profiles_dir() / p.name
+            self.default_filepath = p
+        else:
+            self.default_filepath = _get_default_calibration_path()
 
     def save(
         self, data: CalibrationData, filepath: Optional[Union[str, Path]] = None
@@ -49,7 +59,13 @@ class CalibrationStorage:
         Path
             Path to the saved JSON file.
         """
-        target = Path(filepath) if filepath else self.default_filepath
+        if filepath:
+            target = Path(filepath)
+            if not target.is_absolute():
+                target = get_user_profiles_dir() / target.name
+        else:
+            target = self.default_filepath
+
         target.parent.mkdir(parents=True, exist_ok=True)
 
         dict_data = data.to_dict()
@@ -75,7 +91,12 @@ class CalibrationStorage:
         Optional[CalibrationData]
             Loaded CalibrationData instance, or None if file missing or corrupted.
         """
-        target = Path(filepath) if filepath else self.default_filepath
+        if filepath:
+            target = Path(filepath)
+            if not target.is_absolute():
+                target = get_user_profiles_dir() / target.name
+        else:
+            target = self.default_filepath
 
         if not target.exists() or not target.is_file():
             logger.info("Calibration file not found at %s. Using default settings.", target)

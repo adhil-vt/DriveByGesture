@@ -84,8 +84,21 @@ class HandAnalyzer:
 
         return results
 
+    def cleanup_expired_hands(self, active_hand_ids: Sequence[int]) -> None:
+        """
+        Remove cached finger history for hand IDs that are no longer active.
+        """
+        self._finger_analyzer.cleanup_expired_hands(active_hand_ids)
+
+    def cleanup_hand(self, hand_id: int) -> None:
+        """
+        Remove cached finger history for a specific expired hand ID.
+        """
+        self._finger_analyzer.cleanup_hand(hand_id)
+
     def _analyze_single_hand(self, hand_state: HandState) -> HandAnalysis:
         """
         Private helper to delegate single-hand analysis to FingerAnalyzer.
         """
         return self._finger_analyzer.analyze(hand_state)
+

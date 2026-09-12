@@ -30,11 +30,14 @@ class StatusBarWidget(QFrame):
         self.ind_controller = self._create_chip("Controller", "Disconnected", "#8f96a3")
         # 4. Calibration Status Chip
         self.ind_calibration = self._create_chip("Calibration", "Default", "#ffb300")
+        # 5. Game Detection Chip
+        self.ind_game = self._create_chip("Game", "No game", "#5b616e")
 
         layout.addWidget(self.ind_camera)
         layout.addWidget(self.ind_mediapipe)
         layout.addWidget(self.ind_controller)
         layout.addWidget(self.ind_calibration)
+        layout.addWidget(self.ind_game)
         layout.addStretch()
 
     def _create_chip(self, name: str, initial_status: str, color_hex: str) -> QLabel:
@@ -95,4 +98,22 @@ class StatusBarWidget(QFrame):
             target_lbl.setStyleSheet(
                 f"background-color: #11131a; color: {color_hex}; font-size: 12px; font-weight: 600; "
                 f"padding: 6px 14px; border-radius: 14px; border: 1px solid #282c3c;"
+            )
+
+    def update_game_chip(self, game_name: str) -> None:
+        """
+        Convenience method to update the game detection chip.
+        Pass empty string to show idle state.
+        """
+        if game_name:
+            self.ind_game.setText(f"●  Game: {game_name}")
+            self.ind_game.setStyleSheet(
+                "background-color: #11131a; color: #00e5ff; font-size: 12px; font-weight: 600; "
+                "padding: 6px 14px; border-radius: 14px; border: 1px solid #282c3c;"
+            )
+        else:
+            self.ind_game.setText("●  Game: No game")
+            self.ind_game.setStyleSheet(
+                "background-color: #11131a; color: #5b616e; font-size: 12px; font-weight: 600; "
+                "padding: 6px 14px; border-radius: 14px; border: 1px solid #282c3c;"
             )

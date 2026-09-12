@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "calibrated_at": "2026-07-25T16:40:44.393669+00:00",
+  "calibration_date": "2026-07-25T16:40:44.393669+00:00",
+  "camera_mode": "mirrored",
+  "center_angle": 3.6,
+  "left_limit": -21.79,
+  "right_limit": 21.51,
+  "steering_range": 43.3,
+  "minimum_threshold": 8.0,
+  "maximum_left": -111.78999999999999,
+  "maximum_right": 111.51
+}

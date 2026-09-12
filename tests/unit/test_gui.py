@@ -43,8 +43,9 @@ class TestGUIComponents(unittest.TestCase):
         top_bar.update_status("Running", "#00e676")
         self.assertIn("Running", top_bar.lbl_status.text())
 
+        top_bar.profile_selector.set_profiles(["CustomProfile"])
         top_bar.update_info("CustomProfile", "Webcam 0")
-        self.assertIn("CustomProfile", top_bar.lbl_profile.text())
+        self.assertEqual(top_bar.profile_selector.current_profile_name(), "CustomProfile")
         self.assertIn("Webcam 0", top_bar.lbl_camera.text())
 
     def test_camera_widget_banners_and_overlay(self):
@@ -198,24 +199,90 @@ class TestGUIComponents(unittest.TestCase):
         self.assertEqual(rw.val_right.text(), "+28.1°")
 
     def test_settings_pages(self):
-        from gui.settings_pages import CameraPage, SteeringPage, GeneralPage, AboutPage
-        from calibration.calibration_manager import CalibrationManager
+        from gui.settings_pages import CameraPage, SteeringPage, GeneralPage, ControllerPage, AboutPage
+        from config.schema import GeneralConfig, ControllerConfig
 
+        # GeneralPage audit
         gen = GeneralPage()
         self.assertEqual(gen.lbl_version.text(), "1.0.0")
+        gen.cb_auto_save_calib.setChecked(False)
+        gen.cb_auto_start_pipeline.setChecked(True)
+        gen_cfg = gen.get_config()
+        self.assertFalse(gen_cfg.auto_save_calibration)
+        self.assertTrue(gen_cfg.auto_start_pipeline)
+        gen.reset_to_defaults()
+        self.assertTrue(gen.cb_auto_save_calib.isChecked())
+        self.assertFalse(gen.cb_auto_start_pipeline.isChecked())
 
+        # CameraPage audit
         cam = CameraPage()
         cfg = cam.get_config()
         self.assertEqual(cfg.device_index, 0)
         self.assertEqual(cfg.fps, 30)
 
+        # SteeringPage audit (including steering_inversion test)
         steer = SteeringPage()
+        steer.cb_invert.setChecked(True)
         s_cfg = steer.get_config()
         self.assertEqual(s_cfg.steering_sensitivity, 1.0)
         self.assertEqual(s_cfg.steering_deadzone, 0.05)
+        self.assertTrue(s_cfg.steering_inversion)
+        steer.reset_to_defaults()
+        self.assertFalse(steer.cb_invert.isChecked())
+        self.assertFalse(steer.get_config().steering_inversion)
+
+        # ControllerPage audit
+        ctrl_page = ControllerPage()
+        c_cfg = ctrl_page.get_config()
+        self.assertEqual(c_cfg.emulation_type, "xbox")
+        ctrl_page.combo_type.setCurrentIndex(1)
+        self.assertEqual(ctrl_page.get_config().emulation_type, "null")
+        ctrl_page.reset_to_defaults()
+        self.assertEqual(ctrl_page.get_config().emulation_type, "xbox")
 
         about = AboutPage()
         self.assertTrue(about.findChild(object, name="") is not None)
+
+    def test_desktop_controls_page(self):
+        from gui.settings_pages import DesktopControlsPage, get_implemented_gestures
+
+        page = DesktopControlsPage()
+        gestures = get_implemented_gestures()
+        self.assertTrue(len(gestures) >= 6)
+        self.assertIn("Open Palm", gestures)
+        self.assertIn("Pinch", gestures)
+
+        # Check default config export
+        cfg = page.get_config()
+        self.assertEqual(cfg["cursor_sensitivity"], 1.75)
+        self.assertEqual(cfg["cursor_smoothing"], 0.25)
+        self.assertIn("MOVE_CURSOR", cfg["bindings"].values())
+
+        # Check table row count
+        self.assertEqual(page.table_bindings.rowCount(), len(page.DESKTOP_ACTIONS))
+
+        # Test shortcut preset click
+        page.txt_shortcut.setText("")
+        page.txt_shortcut.setText("ctrl+c")
+        self.assertEqual(page.txt_shortcut.text(), "ctrl+c")
+
+        # Test live telemetry update
+        telem = {
+            "gesture": "Pinch",
+            "desktop_action": "Left Click",
+            "gesture_confidence": 0.96,
+            "desktop_active": True,
+        }
+        page.update_telemetry(telem)
+        self.assertEqual(page.lbl_test_gesture.text(), "[ Pinch ]")
+        self.assertEqual(page.lbl_test_action.text(), "Left Click")
+        self.assertEqual(page.lbl_test_confidence.text(), "96%")
+        self.assertEqual(page.lbl_test_status.text(), "Executing")
+
+        # Test reset
+        page.dsp_sensitivity.setValue(3.5)
+        page.reset_desktop_controls()
+        self.assertEqual(page.dsp_sensitivity.value(), 1.75)
 
     def test_settings_dialog_instantiation(self):
         from gui.settings_dialog import SettingsDialog
@@ -223,10 +290,11 @@ class TestGUIComponents(unittest.TestCase):
 
         mgr = CalibrationManager()
         dialog = SettingsDialog(mgr)
-        self.assertEqual(dialog.windowTitle(), "DriveByGesture — Settings & Configuration")
+        from core.version import get_window_title
+        self.assertEqual(dialog.windowTitle(), get_window_title("Settings"))
         self.assertEqual(dialog.width(), 900)
         self.assertEqual(dialog.height(), 650)
-        self.assertEqual(dialog.nav_list.count(), 7)
+        self.assertEqual(dialog.nav_list.count(), 8)
 
         # Verify _on_apply executes cleanly without CameraConfig constructor exception
         dialog._on_apply()
@@ -240,8 +308,7 @@ class TestGUIComponents(unittest.TestCase):
         from calibration.calibration_manager import CalibrationManager
         from config.schema import GestureConfig, CameraConfig
 
-        mgr = CalibrationManager()
-        worker = PipelineWorker(mgr)
+        worker = PipelineWorker()
 
         # Mock action engine & steering pipeline
         class MockPipeline:
@@ -276,7 +343,10 @@ class TestGUIComponents(unittest.TestCase):
 
         mgr = CalibrationManager()
         dialog = CalibrationDialog(mgr)
-        self.assertEqual(dialog.windowTitle(), "DriveByGesture — Calibration Wizard")
+        dialog.show()
+        _app.processEvents()
+        from core.version import get_window_title
+        self.assertEqual(dialog.windowTitle(), get_window_title("Calibration Wizard"))
         self.assertEqual(dialog.width(), 900)
         self.assertEqual(dialog.height(), 650)
         self.assertTrue(dialog.welcome_view.isVisible())

@@ -18,7 +18,9 @@ class ControlPanelWidget(QFrame):
     start_requested = Signal()
     stop_requested = Signal()
     calibrate_requested = Signal()
+    profiles_requested = Signal()
     settings_requested = Signal()
+    diagnostics_requested = Signal()
     exit_requested = Signal()
 
     def __init__(self, parent=None) -> None:
@@ -38,15 +40,23 @@ class ControlPanelWidget(QFrame):
         self.btn_stop.setObjectName("btnStop")
         self.btn_stop.setEnabled(False)
 
-        # 3. Calibrate Button (Secondary Dark Slate)
+        # 3. Calibrate Button
         self.btn_calibrate = QPushButton("🎯   Calibrate")
         self.btn_calibrate.setObjectName("btnCalibrate")
 
-        # 4. Settings Button (Secondary Dark Slate)
+        # 4. Profiles Button
+        self.btn_profiles = QPushButton("👤   Profiles")
+        self.btn_profiles.setObjectName("btnProfiles")
+
+        # 5. Settings Button
         self.btn_settings = QPushButton("⚙   Settings")
         self.btn_settings.setObjectName("btnSettings")
 
-        # 5. Exit Button (Neutral Slate)
+        # 6. Diagnostics Button
+        self.btn_diagnostics = QPushButton("🔬   Diagnostics")
+        self.btn_diagnostics.setObjectName("btnDiagnostics")
+
+        # 7. Exit Button
         self.btn_exit = QPushButton("✕   Exit")
         self.btn_exit.setObjectName("btnExit")
 
@@ -54,7 +64,9 @@ class ControlPanelWidget(QFrame):
         layout.addWidget(self.btn_stop)
         layout.addSpacing(12)
         layout.addWidget(self.btn_calibrate)
+        layout.addWidget(self.btn_profiles)
         layout.addWidget(self.btn_settings)
+        layout.addWidget(self.btn_diagnostics)
         layout.addStretch()
         layout.addWidget(self.btn_exit)
 
@@ -62,7 +74,9 @@ class ControlPanelWidget(QFrame):
         self.btn_start.clicked.connect(self._on_start_clicked)
         self.btn_stop.clicked.connect(self._on_stop_clicked)
         self.btn_calibrate.clicked.connect(self._on_calibrate_clicked)
+        self.btn_profiles.clicked.connect(self._on_profiles_clicked)
         self.btn_settings.clicked.connect(self._on_settings_clicked)
+        self.btn_diagnostics.clicked.connect(self._on_diagnostics_clicked)
         self.btn_exit.clicked.connect(self._on_exit_clicked)
 
     def set_pipeline_running(self, running: bool) -> None:
@@ -82,5 +96,11 @@ class ControlPanelWidget(QFrame):
     def _on_calibrate_clicked(self) -> None:
         self.calibrate_requested.emit()
 
+    def _on_profiles_clicked(self) -> None:
+        self.profiles_requested.emit()
+
     def _on_settings_clicked(self) -> None:
         self.settings_requested.emit()
+
+    def _on_diagnostics_clicked(self) -> None:
+        self.diagnostics_requested.emit()

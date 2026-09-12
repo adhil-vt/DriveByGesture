@@ -29,24 +29,27 @@ class GestureWidget(QFrame):
         layout.addWidget(lbl_title)
 
         grid = QGridLayout()
-        grid.setHorizontalSpacing(16)
-        grid.setVerticalSpacing(8)
+        grid.setHorizontalSpacing(12)
+        grid.setVerticalSpacing(6)
 
-        # Row 0: Gesture | Mapped Action
+        # Row 0: Gesture
         lbl_g_title = QLabel("Gesture:")
+        lbl_g_title.setFixedWidth(65)
         lbl_g_title.setStyleSheet("color: #8f96a3; font-size: 11px; font-weight: 600;")
         self.val_gesture = QLabel("None")
-        self.val_gesture.setStyleSheet("color: #00e676; font-weight: 700; font-size: 16px;")
+        self.val_gesture.setStyleSheet("color: #00e676; font-weight: 700; font-size: 15px;")
 
+        # Row 1: Action
         lbl_a_title = QLabel("Action:")
+        lbl_a_title.setFixedWidth(65)
         lbl_a_title.setStyleSheet("color: #8f96a3; font-size: 11px; font-weight: 600;")
         self.val_action = QLabel("None")
-        self.val_action.setStyleSheet("color: #ffb300; font-weight: 700; font-size: 16px;")
+        self.val_action.setStyleSheet("color: #ffb300; font-weight: 700; font-size: 15px;")
 
         grid.addWidget(lbl_g_title, 0, 0)
         grid.addWidget(self.val_gesture, 0, 1)
-        grid.addWidget(lbl_a_title, 0, 2)
-        grid.addWidget(self.val_action, 0, 3)
+        grid.addWidget(lbl_a_title, 1, 0)
+        grid.addWidget(self.val_action, 1, 1)
 
         layout.addLayout(grid)
 

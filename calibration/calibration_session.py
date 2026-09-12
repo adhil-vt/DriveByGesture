@@ -371,6 +371,7 @@ class CalibrationSession:
         middle_mcp = lms[9]
 
         # Physical user coordinate system (Physical LEFT -> negative angle, Physical RIGHT -> positive angle)
+        # In raw camera frame facing user: User LEFT -> camera right (middle_mcp.x > wrist.x), User RIGHT -> camera left (middle_mcp.x < wrist.x)
         dx = wrist.x - middle_mcp.x
         dy = middle_mcp.y - wrist.y
 

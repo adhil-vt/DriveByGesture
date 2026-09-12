@@ -86,7 +86,19 @@ class GamePluginLoader:
         PluginError
             If ``game_id`` is not in the discovered plugin registry.
         """
-        raise NotImplementedError
+        if game_id not in self._plugins:
+            raise PluginError(f"Game plugin '{game_id}' not found in registry.")
+        if self._active is not None:
+            try:
+                self._active.on_deactivate()
+            except Exception as exc:
+                logger.warning("Error deactivating plugin '%s': %s", self._active.game_id, exc)
+        self._active = self._plugins[game_id]
+        try:
+            self._active.on_activate()
+        except Exception as exc:
+            logger.warning("Error activating plugin '%s': %s", game_id, exc)
+        logger.info("GamePluginLoader: activated '%s'.", game_id)
 
     @property
     def active_plugin(self) -> Optional[IGamePlugin]:
@@ -101,11 +113,45 @@ class GamePluginLoader:
 
     def _load_from_entry_points(self) -> None:
         """Load plugins registered via pyproject.toml entry points."""
-        raise NotImplementedError
+        try:
+            eps = importlib.metadata.entry_points(group="gesturedrive.games")
+            for ep in eps:
+                try:
+                    cls = ep.load()
+                    plugin = cls()
+                    self._register(plugin)
+                except Exception as exc:
+                    logger.warning("PluginError loading entry point '%s': %s", ep.name, exc)
+        except Exception as exc:
+            logger.debug("GamePluginLoader: entry point scan error: %s", exc)
 
     def _load_local_plugins(self) -> None:
         """Scan games/ subdirectories for local plugin.py modules."""
-        raise NotImplementedError
+        import pkgutil
+        import games  # noqa: PLC0415
+        package_path = games.__path__
+        for finder, name, ispkg in pkgutil.iter_modules(package_path):
+            if not ispkg:
+                continue
+            module_name = f"games.{name}.plugin"
+            try:
+                module = importlib.import_module(module_name)
+                for attr_name in dir(module):
+                    obj = getattr(module, attr_name)
+                    try:
+                        if (
+                            isinstance(obj, type)
+                            and issubclass(obj, IGamePlugin)
+                            and obj is not IGamePlugin
+                            and not getattr(obj, '__abstractmethods__', None)
+                        ):
+                            self._register(obj())
+                    except Exception:
+                        continue
+            except ModuleNotFoundError:
+                pass
+            except Exception as exc:
+                logger.warning("PluginError loading local plugin '%s': %s", module_name, exc)
 
     def _register(self, plugin: IGamePlugin) -> None:
         """Add a validated plugin to the registry."""

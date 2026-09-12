@@ -11,7 +11,12 @@ import logging
 from analysis.finger_state import FingerPosition, HandAnalysis
 from gestures.base import Gesture
 from gestures.gesture_result import GestureResult
-from gestures.builtins.utils import calculate_quality_and_stability, extract_handedness
+from gestures.builtins.utils import (
+    calculate_quality_and_stability,
+    distance_3d,
+    extract_handedness,
+    get_hand_scale,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -26,32 +31,13 @@ class PeaceGesture(Gesture):
     - Ring and Pinky fingers must be CURLED (tolerating at most one PARTIALLY_BENT finger).
     - Ring and Pinky fingers must NOT be EXTENDED.
     - Index and Middle fingers must NOT be CURLED or UNKNOWN.
-    - Thumb position is flexible (EXTENDED, PARTIALLY_BENT, CURLED, or UNKNOWN).
-
-    Confidence Calculation
-    ----------------------
-    - Evaluates extension quality of Index and Middle fingers.
-    - Evaluates curl quality of Ring and Pinky fingers.
-    - Factors in individual finger position confidences and landmark stability.
+    - Index Tip (8) and Middle Tip (12) must be separated (V-shape).
     """
 
     def __init__(self, priority: int = 50, enabled: bool = True) -> None:
         super().__init__(name="Peace", priority=priority, enabled=enabled)
 
     def recognize(self, hand_analysis: HandAnalysis) -> GestureResult:
-        """
-        Analyze hand state and evaluate whether a Peace gesture is performed.
-
-        Parameters
-        ----------
-        hand_analysis: HandAnalysis
-            Analyzed finger states and hand state metadata for a single hand.
-
-        Returns
-        -------
-        GestureResult
-            Result indicating detection status, confidence score, timestamp, and handedness.
-        """
         timestamp = getattr(hand_analysis, "timestamp", 0.0)
         handedness = extract_handedness(hand_analysis)
 
@@ -65,6 +51,7 @@ class PeaceGesture(Gesture):
                     confidence=0.0,
                     timestamp=timestamp,
                     handedness=handedness,
+                    rejection_reason="Index/Middle not extended",
                 )
 
         ext_count = sum(1 for f in extended_pair if f.position == FingerPosition.EXTENDED)
@@ -76,6 +63,7 @@ class PeaceGesture(Gesture):
                 confidence=0.0,
                 timestamp=timestamp,
                 handedness=handedness,
+                rejection_reason="Index/Middle not extended",
             )
 
         # 2. Ring and Pinky fingers must NOT be EXTENDED or UNKNOWN
@@ -88,6 +76,7 @@ class PeaceGesture(Gesture):
                     confidence=0.0,
                     timestamp=timestamp,
                     handedness=handedness,
+                    rejection_reason=f"{f.name.name.title()} finger extended",
                 )
 
         curl_count = sum(1 for f in curled_pair if f.position == FingerPosition.CURLED)
@@ -99,7 +88,23 @@ class PeaceGesture(Gesture):
                 confidence=0.0,
                 timestamp=timestamp,
                 handedness=handedness,
+                rejection_reason="Ring/Pinky not folded",
             )
+
+        # 3. Check V-shape separation between Index tip (8) and Middle tip (12)
+        if hasattr(hand_analysis, "hand_state") and hand_analysis.hand_state and len(hand_analysis.hand_state.landmarks) >= 21:
+            lms = hand_analysis.hand_state.landmarks
+            scale = get_hand_scale(hand_analysis.hand_state)
+            separation = distance_3d(lms[8], lms[12]) / scale
+            if separation < 0.18:
+                return GestureResult(
+                    gesture_name=self.name,
+                    detected=False,
+                    confidence=0.0,
+                    timestamp=timestamp,
+                    handedness=handedness,
+                    rejection_reason="Finger separation too small",
+                )
 
         # Compute confidence score
         confidence = self._compute_confidence(hand_analysis)
@@ -142,17 +147,16 @@ class PeaceGesture(Gesture):
 
         curl_factor = sum(curl_scores) / len(curl_scores)
 
-        pose_score = 0.50 * ext_factor + 0.50 * curl_factor
+        pose_score = 0.55 * ext_factor + 0.45 * curl_factor
 
-        # Quality & Stability factor across all 5 fingers
-        all_fingers = [
-            hand_analysis.thumb,
+        # Quality & Stability factor focused on primary active V-sign fingers (Index, Middle, Ring, Pinky)
+        active_fingers = [
             hand_analysis.index,
             hand_analysis.middle,
             hand_analysis.ring,
             hand_analysis.pinky,
         ]
-        quality_stability = calculate_quality_and_stability(all_fingers)
+        quality_stability = calculate_quality_and_stability(active_fingers)
 
         final_score = pose_score * quality_stability
         return round(max(0.0, min(1.0, final_score)), 2)

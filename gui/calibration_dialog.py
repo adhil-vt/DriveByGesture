@@ -28,13 +28,18 @@ from gui.calibration_review import ReviewWidget
 from gui.camera_widget import CameraWidget
 from gui.styles import DARK_THEME_QSS
 
+from core.resources import apply_app_icon
+from core.version import get_window_title
+
 logger = logging.getLogger(__name__)
 
 
 class CalibrationDialog(QDialog):
     """
-    Graphical Setup Wizard for Intelligent Steering Calibration.
+    Interactive 4-Step Steering Calibration Wizard Dialog.
     """
+
+    calibration_completed = Signal(object)  # CalibrationData
 
     def __init__(self, calibration_manager: CalibrationManager, parent=None) -> None:
         super().__init__(parent)
@@ -42,7 +47,8 @@ class CalibrationDialog(QDialog):
         self.last_snapshot: StepSnapshot | None = None
         self._countdown_val: int = 3
 
-        self.setWindowTitle("DriveByGesture — Calibration Wizard")
+        self.setWindowTitle(get_window_title("Calibration Wizard"))
+        apply_app_icon(self)
         self.resize(900, 650)
         self.setMinimumSize(850, 600)
         self.setModal(True)

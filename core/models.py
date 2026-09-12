@@ -109,18 +109,20 @@ class Frame:
 
     Attributes
     ----------
-    image:      The raw pixel data as a numpy ndarray (H×W×3, BGR).
-                Typed as ``object`` to avoid a numpy import in core/.
-    timestamp:  Unix timestamp (seconds) at acquisition time.
-    seq_id:     Monotonically increasing frame counter from CaptureLoop.
-    width:      Frame width in pixels.
-    height:     Frame height in pixels.
+    image:              The raw pixel data as a numpy ndarray (H×W×3, BGR).
+                        Typed as ``object`` to avoid a numpy import in core/.
+    timestamp:          Unix timestamp (seconds) at acquisition time.
+    seq_id:             Monotonically increasing frame counter from CaptureLoop.
+    width:              Frame width in pixels.
+    height:             Frame height in pixels.
+    capture_timestamp:  High-precision monotonic timestamp (seconds) at hardware acquisition.
     """
     image: object           # numpy.ndarray at runtime — kept as object here
     timestamp: float
     seq_id: int
     width: int
     height: int
+    capture_timestamp: float = 0.0
 
 
 # ── Gesture models ─────────────────────────────────────────────────────────────

@@ -81,7 +81,7 @@ XBOX_OUTPUT_HANDBRAKE_BUTTON: str = "A"
 ACTIVE_GAME_PLUGIN_ID: str = "forza_horizon"
 
 # ── [active_profile] ──────────────────────────────────────────────────────────
-ACTIVE_PROFILE_NAME: str = "default"
+ACTIVE_PROFILE_NAME: str = "Default"
 
 # ── [logging] ─────────────────────────────────────────────────────────────────
 LOGGING_LEVEL: str = "INFO"
@@ -109,5 +109,4 @@ CALIBRATION_CAMERA_MIRRORED: bool = True
 CALIBRATION_TRANSITION_PAUSE_DURATION: float = 1.5
 CALIBRATION_TRANSITION_COUNTDOWN_DURATION: float = 3.0
 CALIBRATION_MAX_CENTER_TOLERANCE: float = 3.0
-
 

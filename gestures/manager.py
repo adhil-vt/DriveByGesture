@@ -61,8 +61,8 @@ class ActiveGesture:
 
 class HandGestureTracker:
     """
-    Per-hand state machine tracking temporal stabilization, cooldown enforcement,
-    and active gesture transitions.
+    Per-hand state machine tracking temporal stabilization, dual-threshold hysteresis
+    (activation & deactivation validation), cooldown enforcement, and active gesture transitions.
     """
 
     def __init__(self, hand: str, config: GestureConfig) -> None:
@@ -77,56 +77,75 @@ class HandGestureTracker:
 
         self.candidate_gesture: str = "Unknown"
         self.candidate_count: int = 0
+        self.deactivation_count: int = 0
         self.cooldown_until: float = 0.0
 
     def update(
         self, candidate_name: str, candidate_confidence: float, timestamp: float
     ) -> ActiveGesture:
         """
-        Update the hand gesture state machine for the current frame.
-
-        Parameters
-        ----------
-        candidate_name: str
-            Name of the winning gesture candidate for the current frame.
-        candidate_confidence: float
-            Confidence score of the winning candidate.
-        timestamp: float
-            Current frame timestamp in seconds.
-
-        Returns
-        -------
-        ActiveGesture
-            Updated active gesture state.
+        Update the hand gesture state machine for the current frame with dual-threshold hysteresis.
         """
         self.last_update_timestamp = timestamp
         cooldown_rem = max(0.0, self.cooldown_until - timestamp)
+        deactivation_limit = getattr(
+            self._config, "deactivation_frames", self._config.activation_frames
+        )
 
-        # 1. Check Cooldown Lockout
-        if cooldown_rem > 0.0:
-            if candidate_name == self.current_gesture:
-                self.confidence = candidate_confidence
+        # 1. State Machine Logic
+        if self.current_gesture == "Unknown":
+            # In UNKNOWN state — require activation_frames to activate
+            if candidate_name == self.candidate_gesture:
                 self.candidate_count += 1
-            return self.get_active_state(timestamp)
+            else:
+                self.candidate_gesture = candidate_name
+                self.candidate_count = 1
 
-        # 2. Temporal Stabilization
-        if candidate_name == self.candidate_gesture:
-            self.candidate_count += 1
-        else:
-            self.candidate_gesture = candidate_name
-            self.candidate_count = 1
-
-        # 3. Activation Check
-        if self.candidate_count >= self._config.activation_frames:
-            if candidate_name != self.current_gesture:
+            if candidate_name != "Unknown" and self.candidate_count >= self._config.activation_frames:
                 self.previous_gesture = self.current_gesture
                 self.current_gesture = candidate_name
                 self.activation_timestamp = timestamp
                 self.confidence = candidate_confidence
+                self.deactivation_count = 0
                 if self._config.cooldown_seconds > 0.0:
                     self.cooldown_until = timestamp + self._config.cooldown_seconds
-            else:
+        else:
+            # In ACTIVE state — track current gesture stability and candidate challenges
+            if candidate_name == self.current_gesture:
                 self.confidence = candidate_confidence
+                self.candidate_count += 1
+                self.deactivation_count = 0
+            else:
+                self.deactivation_count += 1
+
+                # Track new candidate accumulation
+                if candidate_name == self.candidate_gesture:
+                    self.candidate_count += 1
+                else:
+                    self.candidate_gesture = candidate_name
+                    self.candidate_count = 1
+
+                # Check for direct transition to a new valid candidate
+                if (
+                    self.candidate_gesture != "Unknown"
+                    and self.candidate_count >= self._config.activation_frames
+                    and self.deactivation_count >= deactivation_limit
+                ):
+                    # Deliberate gesture switch satisfied (accumulated full activation_frames)
+                    self.previous_gesture = self.current_gesture
+                    self.current_gesture = self.candidate_gesture
+                    self.activation_timestamp = timestamp
+                    self.confidence = candidate_confidence
+                    self.deactivation_count = 0
+                    if self._config.cooldown_seconds > 0.0:
+                        self.cooldown_until = timestamp + self._config.cooldown_seconds
+                elif self.deactivation_count >= deactivation_limit:
+                    # Deactivation frames reached with no new valid gesture ready
+                    if cooldown_rem <= 0.0 or self.deactivation_count >= (deactivation_limit + 2):
+                        self.previous_gesture = self.current_gesture
+                        self.current_gesture = "Unknown"
+                        self.confidence = 0.0
+                        self.deactivation_count = 0
 
         return self.get_active_state(timestamp)
 
@@ -258,16 +277,16 @@ class GestureManager:
         enabled_gestures = [g for g in registered_gestures if g.enabled]
 
         candidates: List[Tuple[GestureResult, int]] = []
+        last_rejection_reason = "No matching pose"
 
         for gesture in enabled_gestures:
             try:
                 res = gesture.recognize(hand_analysis)
-                if (
-                    res is not None
-                    and res.detected
-                    and res.confidence >= self.config.confidence_threshold
-                ):
-                    candidates.append((res, gesture.priority))
+                if res is not None:
+                    if res.detected and res.confidence >= self.config.confidence_threshold:
+                        candidates.append((res, gesture.priority))
+                    elif res.rejection_reason:
+                        last_rejection_reason = f"{gesture.name}: {res.rejection_reason}"
             except Exception as exc:
                 logger.error("Error executing gesture '%s': %s", gesture.name, exc, exc_info=True)
 
@@ -278,6 +297,7 @@ class GestureManager:
                 confidence=0.0,
                 timestamp=timestamp,
                 handedness=handedness,
+                rejection_reason=last_rejection_reason,
             )
 
         # Sort deterministically:

@@ -92,8 +92,8 @@ class TestGestureManager(unittest.TestCase):
         self.assertEqual(active3.frames_stable, 3)
 
     def test_cooldown_enforcement(self):
-        # Activation frames = 1, cooldown = 1.0s
-        config = GestureConfig(activation_frames=1, cooldown_seconds=1.0, confidence_threshold=0.5)
+        # Activation frames = 2, cooldown = 1.0s
+        config = GestureConfig(activation_frames=2, cooldown_seconds=1.0, confidence_threshold=0.5)
         registry = GestureRegistry()
         g_fist = DummyGesture(name="Fist", priority=10, detected=True, confidence=0.9)
         g_point = DummyGesture(name="Point", priority=20, detected=True, confidence=0.95)
@@ -102,21 +102,22 @@ class TestGestureManager(unittest.TestCase):
         mgr = GestureManager(registry=registry, config=config)
         hand = make_hand_analysis(timestamp=1.0)
 
-        # Activate Fist at t=1.0s -> cooldown set until t=2.0s
-        res1 = mgr.process_hands([hand])[0]
+        # Frame 1 & 2: Activate Fist -> cooldown set until t=2.0s
+        mgr.process_hands([hand])
+        res1 = mgr.process_hands([make_hand_analysis(timestamp=1.033)])[0]
         self.assertEqual(res1.gesture_name, "Fist")
 
         # Now register Point (higher priority & confidence)
         registry.register(g_point)
 
-        # Frame at t=1.2s (during cooldown of 1.0s): Point is candidate, but Fist remains active due to cooldown
+        # Frame 1 of Point at t=1.2s (during cooldown): candidate count=1 < activation_frames (2), so Fist remains active
         hand_t12 = make_hand_analysis(timestamp=1.2)
         res2 = mgr.process_hands([hand_t12])[0]
         self.assertEqual(res2.gesture_name, "Fist")
 
-        # Frame at t=2.1s (after cooldown expires): Point activates!
-        hand_t21 = make_hand_analysis(timestamp=2.1)
-        res3 = mgr.process_hands([hand_t21])[0]
+        # Frame 2 of Point at t=1.233s: candidate count=2 satisfies activation_frames -> Point activates!
+        hand_t123 = make_hand_analysis(timestamp=1.233)
+        res3 = mgr.process_hands([hand_t123])[0]
         self.assertEqual(res3.gesture_name, "Point")
 
     def test_confidence_threshold_filtering(self):

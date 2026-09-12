@@ -93,6 +93,8 @@ class HandState:
         (x, y, z) average coordinate of all 21 landmarks.
     timestamp:
         Frame capture timestamp (Unix timestamp in seconds).
+    hand_id:
+        Persistent internal hand identity assigned by TemporalHandTracker.
     """
     handedness: Handedness
     confidence: float
@@ -101,6 +103,7 @@ class HandState:
     palm_center: Tuple[float, float, float]
     hand_center: Tuple[float, float, float]
     timestamp: float = 0.0
+    hand_id: int = 0
 
 
 class TrackingService:

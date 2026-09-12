@@ -34,3 +34,4 @@ class GestureResult:
     confidence: float
     timestamp: float
     handedness: Optional[str] = None
+    rejection_reason: Optional[str] = None

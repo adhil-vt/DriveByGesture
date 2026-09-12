@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import math
 from collections import deque
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Sequence, Tuple
 
 from config.schema import AnalysisConfig
 from analysis.finger_state import (
@@ -49,15 +49,40 @@ class FingerAnalyzer:
 
     def __init__(self, config: Optional[AnalysisConfig] = None) -> None:
         self._config = config or AnalysisConfig()
-        # History of candidate positions per (handedness_name, finger_name)
-        self._history: Dict[Tuple[str, FingerName], deque[FingerPosition]] = {}
-        # Last reported position per (handedness_name, finger_name) for hysteresis
-        self._prev_state: Dict[Tuple[str, FingerName], FingerPosition] = {}
+        # History of candidate positions per (hand_id, finger_name)
+        self._history: Dict[Tuple[int, FingerName], deque[FingerPosition]] = {}
+        # Last reported position per (hand_id, finger_name) for hysteresis
+        self._prev_state: Dict[Tuple[int, FingerName], FingerPosition] = {}
 
     def reset(self) -> None:
         """Clear temporal history and state cache."""
         self._history.clear()
         self._prev_state.clear()
+
+    def cleanup_expired_hands(self, active_hand_ids: Sequence[int]) -> None:
+        """
+        Remove cached finger history and previous states for hand IDs that are no longer active.
+        """
+        active_set = set(active_hand_ids)
+        history_keys_to_remove = [k for k in self._history if k[0] not in active_set]
+        for k in history_keys_to_remove:
+            del self._history[k]
+
+        prev_keys_to_remove = [k for k in self._prev_state if k[0] not in active_set]
+        for k in prev_keys_to_remove:
+            del self._prev_state[k]
+
+    def cleanup_hand(self, hand_id: int) -> None:
+        """
+        Remove cached finger history and previous states for a specific expired hand ID.
+        """
+        history_keys_to_remove = [k for k in self._history if k[0] == hand_id]
+        for k in history_keys_to_remove:
+            del self._history[k]
+
+        prev_keys_to_remove = [k for k in self._prev_state if k[0] == hand_id]
+        for k in prev_keys_to_remove:
+            del self._prev_state[k]
 
     def analyze(self, hand_state: HandState) -> HandAnalysis:
         """
@@ -119,7 +144,7 @@ class FingerAnalyzer:
         middle_mcp = lms[9]
         pinky_mcp  = lms[17]
 
-        key = (hand_state.handedness.name, FingerName.THUMB)
+        key = (getattr(hand_state, "hand_id", 0), FingerName.THUMB)
         prev_pos = self._prev_state.get(key, FingerPosition.UNKNOWN)
 
         # 1. Palm Center & Reference Scale
@@ -157,13 +182,22 @@ class FingerAnalyzer:
         ip_angle  = self._angle_3d(mcp, ip, tip)
         mcp_angle = self._angle_3d(cmc, mcp, ip)
 
-        # 5. Nearby Finger Context (is index finger curled into a fist?)
+        # 5. Nearby Finger Context (are index and middle fingers curled in a fist?)
+        middle_tip = lms[12]
         index_curl_dist = self._distance_3d(index_tip, index_mcp) / scale
-        is_fist_context = (index_curl_dist < 0.65)
+        middle_curl_dist = self._distance_3d(middle_tip, middle_mcp) / scale
+        is_fist_context = (index_curl_dist < 0.70 and middle_curl_dist < 0.70)
 
-        # 6. Occlusion & Collapse Detection
+        # 6. Thumb Spatial Projections
+        thumb_elevation = (index_mcp.y - tip.y) / scale
+        thumb_upward_vec = (mcp.y - tip.y) / scale
+        thumb_depression = (tip.y - mcp.y) / scale
+        thumb_span = self._distance_3d(mcp, tip) / scale
         thumb_len = self._distance_3d(cmc, mcp) + self._distance_3d(mcp, ip) + self._distance_3d(ip, tip)
         is_occluded = (thumb_len < scale * 0.40) or (d_tip_index < 0.22)
+
+        is_thumbs_up = (thumb_elevation >= 0.28 and thumb_upward_vec >= 0.22 and thumb_span >= 0.30)
+        is_thumbs_down = (thumb_depression >= 0.08 and thumb_span >= 0.28 and ((tip.y - index_mcp.y) / scale) >= 0.08)
 
         # 7. Multi-Signal Fusion Metric Calculation
         s_palm  = min(1.0, max(0.0, d_tip_palm / 0.65))
@@ -173,12 +207,20 @@ class FingerAnalyzer:
 
         fusion_score = 0.35 * s_palm + 0.35 * s_index + 0.15 * s_plane + 0.15 * s_angle
 
-        # Apply Occlusion & Fold Penalties
+        # 8. Apply Fist Fold or Extension Context
         if is_fist_context:
-            if is_occluded or d_tip_index < 0.40 or d_tip_palm < 0.50:
+            if is_thumbs_up:
+                fusion_score = max(fusion_score, 0.85)
+            elif is_thumbs_down:
+                fusion_score = max(fusion_score, 0.85)
+            else:
+                # Naturally folded across curled fingers or resting against palm
+                fusion_score = min(fusion_score * 0.25, 0.20)
+        else:
+            if is_occluded or d_tip_index < 0.25:
                 fusion_score *= 0.40
 
-        if d_tip_pinky < 0.60:
+        if d_tip_pinky < 0.60 and not (is_thumbs_up or is_thumbs_down):
             fold_penalty = (0.60 - d_tip_pinky) * 0.70
             fusion_score = max(0.0, fusion_score - fold_penalty)
 
@@ -198,8 +240,8 @@ class FingerAnalyzer:
             prev_pos=prev_pos,
         )
 
-        # If occluded & in fist context, default candidate to CURLED if uncertain
-        if is_occluded and is_fist_context and candidate_pos == FingerPosition.EXTENDED:
+        # If occluded & in fist context without explicit extension, default candidate to CURLED
+        if is_occluded and is_fist_context and not (is_thumbs_up or is_thumbs_down):
             candidate_pos = FingerPosition.CURLED
 
         # Temporal Majority Voting
@@ -301,7 +343,7 @@ class FingerAnalyzer:
         curl_thresh = self._config.finger_curled_angle
         margin      = self._config.finger_hysteresis_margin
 
-        key = (hand_state.handedness.name, finger_name)
+        key = (getattr(hand_state, "hand_id", 0), finger_name)
         prev_pos = self._prev_state.get(key, FingerPosition.UNKNOWN)
 
         # Apply Hysteresis
@@ -382,7 +424,7 @@ class FingerAnalyzer:
 
     def _apply_temporal_smoothing(
         self,
-        key: Tuple[str, FingerName],
+        key: Tuple[int, FingerName],
         candidate_pos: FingerPosition,
     ) -> Tuple[FingerPosition, float]:
         """
